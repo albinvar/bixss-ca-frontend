@@ -10,6 +10,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -41,96 +48,135 @@ import {
   PlayCircle,
   Sparkles
 } from 'lucide-react';
+import { companiesApi, documentsApi } from '@/lib/api';
+import { financialAnalysisApi } from '@/lib/financial-analysis-api';
+import { analysisApi } from '@/lib/api';
+import { toast } from 'sonner';
 
 // Analysis statuses
 type AnalysisStatus = 'queued' | 'processing' | 'completed' | 'failed';
 
-// Mock documents data
-const mockDocuments = [
-  { id: 1, name: 'GST_Return_Q4_2024.pdf', category: 'GST Returns', selected: false },
-  { id: 2, name: 'Annual_Financial_Statement_2024.xlsx', category: 'Financial Statements', selected: false },
-  { id: 3, name: 'Tax_Return_Assessment_Year_2024.pdf', category: 'Tax Returns', selected: false },
-  { id: 4, name: 'Compliance_Certificate_2024.pdf', category: 'Compliance Documents', selected: false },
-  { id: 5, name: 'Audit_Report_H1_2024.pdf', category: 'Audit Reports', selected: false },
-];
+interface Company {
+  _id: string;
+  id: string;
+  name: string;
+}
 
-// Mock analysis data
-const mockAnalyses = [
-  {
-    id: 1,
-    title: 'Q4 2024 Tax Analysis',
-    company: 'Tech Solutions Inc.',
-    status: 'completed' as AnalysisStatus,
-    documents: 3,
-    createdAt: '2025-10-12',
-    completedAt: '2025-10-12',
-    reports: ['Tax_Summary_Report.pdf', 'Compliance_Check.pdf'],
-    progress: 100,
-    queuePosition: null,
-  },
-  {
-    id: 2,
-    title: 'Financial Statement Review',
-    company: 'Global Finance Corp',
-    status: 'processing' as AnalysisStatus,
-    documents: 2,
-    createdAt: '2025-10-13',
-    completedAt: null,
-    reports: [],
-    progress: 65,
-    queuePosition: 1,
-  },
-  {
-    id: 3,
-    title: 'Compliance Audit Q3',
-    company: 'Retail Masters Ltd',
-    status: 'queued' as AnalysisStatus,
-    documents: 4,
-    createdAt: '2025-10-14',
-    completedAt: null,
-    reports: [],
-    progress: 0,
-    queuePosition: 2,
-  },
-  {
-    id: 4,
-    title: 'Annual Report Analysis',
-    company: 'Healthcare Plus',
-    status: 'queued' as AnalysisStatus,
-    documents: 3,
-    createdAt: '2025-10-14',
-    completedAt: null,
-    reports: [],
-    progress: 0,
-    queuePosition: 3,
-  },
-];
+interface Document {
+  _id: string;
+  originalName: string;
+  category: string;
+  fileType: string;
+  status: string;
+  createdAt: string;
+}
 
 export default function AnalysisPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [isNewAnalysisOpen, setIsNewAnalysisOpen] = useState(false);
-  const [selectedDocuments, setSelectedDocuments] = useState<number[]>([]);
+  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [analyses, setAnalyses] = useState(mockAnalyses);
+  const [analyses, setAnalyses] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
 
   // Redirect if user is not a CA
   useEffect(() => {
     if (user && user.role !== 'ca') {
       router.push('/dashboard');
+    } else if (user && user.role === 'ca') {
+      fetchCompanies();
     }
   }, [user, router]);
 
+  // Fetch documents when company changes
+  useEffect(() => {
+    if (selectedCompanyId) {
+      fetchDocuments(selectedCompanyId);
+      fetchAnalysisHistory(selectedCompanyId);
+    }
+  }, [selectedCompanyId]);
+
+  const fetchCompanies = async () => {
+    setIsLoadingCompanies(true);
+    try {
+      const response = await companiesApi.getAll({ limit: 100 });
+      if (response.success && response.data.companies) {
+        setCompanies(response.data.companies);
+        if (response.data.companies.length > 0) {
+          setSelectedCompanyId(response.data.companies[0]._id || response.data.companies[0].id);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch companies:', error);
+      toast.error('Failed to load companies');
+    } finally {
+      setIsLoadingCompanies(false);
+    }
+  };
+
+  const fetchDocuments = async (companyId: string) => {
+    setIsLoadingDocuments(true);
+    try {
+      // Call Node.js backend for documents
+      const response = await documentsApi.getByCompany(companyId, { status: 'uploaded' });
+      if (response.success && response.data && response.data.documents) {
+        setDocuments(response.data.documents);
+      } else {
+        setDocuments([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch documents:', error);
+      toast.error('Failed to load documents');
+      setDocuments([]);
+    } finally {
+      setIsLoadingDocuments(false);
+    }
+  };
+
+  const fetchAnalysisHistory = async (companyId: string) => {
+    try {
+      // Call Node.js backend instead of Python
+      const response = await analysisApi.getHistory(companyId, 50);
+      if (response.success && response.data && response.data.analyses) {
+        // Map history to analysis list
+        const historicalAnalyses = response.data.analyses.map((item: any) => ({
+          id: item.analysis_id,
+          title: `Analysis for ${response.data.company_name}`,
+          company: response.data.company_name,
+          status: 'completed' as AnalysisStatus,
+          documents: item.document_count || 0,
+          createdAt: new Date(item.date).toISOString().split('T')[0],
+          completedAt: new Date(item.date).toISOString().split('T')[0],
+          reports: [],
+          progress: 100,
+          queuePosition: null,
+        }));
+        setAnalyses(historicalAnalyses);
+      }
+    } catch (error) {
+      console.error('Failed to fetch analysis history:', error);
+      // Don't show error toast as this is not critical
+    }
+  };
+
   const handleRefresh = () => {
     setIsRefreshing(true);
+    if (selectedCompanyId) {
+      fetchDocuments(selectedCompanyId);
+    }
     setTimeout(() => {
       setIsRefreshing(false);
     }, 1000);
   };
 
-  const handleDocumentToggle = (docId: number) => {
+  const handleDocumentToggle = (docId: string) => {
     setSelectedDocuments(prev =>
       prev.includes(docId)
         ? prev.filter(id => id !== docId)
@@ -139,36 +185,148 @@ export default function AnalysisPage() {
   };
 
   const handleSubmitAnalysis = async () => {
+    if (!selectedCompanyId || selectedDocuments.length === 0) {
+      toast.error('Please select documents to analyze');
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      // Get selected company details
+      const selectedCompany = companies.find(c =>
+        (c._id || c.id) === selectedCompanyId
+      );
 
-    // Add new analysis to the list
-    const queuedCount = analyses.filter(a => a.status === 'queued' || a.status === 'processing').length;
-    const newAnalysis = {
-      id: analyses.length + 1,
-      title: `Analysis #${analyses.length + 1}`,
-      company: getSelectedCompany(),
-      status: 'queued' as AnalysisStatus,
-      documents: selectedDocuments.length,
-      createdAt: new Date().toISOString().split('T')[0],
-      completedAt: null,
-      reports: [],
-      progress: 0,
-      queuePosition: queuedCount + 1,
-    };
+      if (!selectedCompany) {
+        toast.error('Selected company not found');
+        return;
+      }
 
-    setAnalyses([newAnalysis, ...analyses]);
-    setIsSubmitting(false);
-    setShowSuccess(true);
+      // Get the selected documents details
+      const selectedDocs = documents.filter(doc =>
+        selectedDocuments.includes(doc._id)
+      );
 
-    // Show success animation
-    setTimeout(() => {
-      setShowSuccess(false);
-      setIsNewAnalysisOpen(false);
-      setSelectedDocuments([]);
-    }, 2000);
+      if (selectedDocs.length === 0) {
+        toast.error('Selected documents not found');
+        return;
+      }
+
+      // Get MongoDB document IDs (strings)
+      const documentIds = selectedDocs.map(doc => doc._id);
+
+      // Call Node.js backend which proxies to Python microservice
+      const response = await analysisApi.trigger(
+        documentIds,
+        selectedCompanyId,
+        selectedCompany.name,
+        'comprehensive'
+      );
+
+      console.log('Analysis response:', response);
+
+      if (response.success && response.data?.job_id) {
+        const jobId = response.data.job_id;
+        // Create analysis entry with real job ID
+        const queuedCount = analyses.filter(a => a.status === 'queued' || a.status === 'processing').length;
+        const newAnalysis = {
+          id: jobId,
+          title: `Analysis for ${selectedCompany.name}`,
+          company: selectedCompany.name,
+          status: 'queued' as AnalysisStatus,
+          documents: selectedDocuments.length,
+          createdAt: new Date().toISOString().split('T')[0],
+          completedAt: null,
+          reports: [],
+          progress: 0,
+          queuePosition: queuedCount + 1,
+        };
+
+        setAnalyses([newAnalysis, ...analyses]);
+        setIsSubmitting(false);
+        setShowSuccess(true);
+
+        toast.success(`Analysis started! Job ID: ${jobId}`);
+
+        // Start polling for job status
+        pollJobStatus(jobId);
+      } else {
+        throw new Error('No job ID returned from analysis service');
+      }
+
+      // Show success animation
+      setTimeout(() => {
+        setShowSuccess(false);
+        setIsNewAnalysisOpen(false);
+        setSelectedDocuments([]);
+      }, 2000);
+
+    } catch (error: any) {
+      console.error('Failed to start analysis:', error);
+      toast.error(error.message || 'Failed to start analysis');
+      setIsSubmitting(false);
+    }
+  };
+
+  const pollJobStatus = async (jobId: string) => {
+    try {
+      await financialAnalysisApi.pollJobStatus(
+        jobId,
+        (status) => {
+          // Update analysis in list
+          setAnalyses(prev => prev.map(analysis =>
+            analysis.id === jobId
+              ? {
+                  ...analysis,
+                  status: status.status as AnalysisStatus,
+                  progress: status.progress
+                }
+              : analysis
+          ));
+
+          if (status.status === 'processing') {
+            toast.info(status.message, { id: jobId });
+          }
+        }
+      );
+
+      // Job completed - get final status
+      const finalStatus = await financialAnalysisApi.getJobStatus(jobId);
+
+      // Update analysis with actual analysis_id from result
+      const analysisId = finalStatus.result?.analysis_id;
+
+      setAnalyses(prev => prev.map(analysis =>
+        analysis.id === jobId
+          ? {
+              ...analysis,
+              id: analysisId || analysis.id, // Update to analysis_id
+              status: 'completed' as AnalysisStatus,
+              progress: 100,
+              completedAt: new Date().toISOString().split('T')[0]
+            }
+          : analysis
+      ));
+
+      if (analysisId) {
+        toast.success('Analysis complete!', {
+          description: `Analysis ID: ${analysisId}`,
+          action: {
+            label: 'View Results',
+            onClick: () => router.push(`/dashboard/analysis/${analysisId}`)
+          }
+        });
+      }
+    } catch (error: any) {
+      console.error('Job polling error:', error);
+      setAnalyses(prev => prev.map(analysis =>
+        analysis.id === jobId
+          ? { ...analysis, status: 'failed' as AnalysisStatus }
+          : analysis
+      ));
+      toast.error('Analysis failed');
+    }
   };
 
   const getSelectedCompany = () => {
@@ -264,35 +422,76 @@ export default function AnalysisPage() {
               {!showSuccess ? (
                 <>
                   <div className="space-y-4 sm:space-y-6 py-3 sm:py-4">
-                    {/* Company Info */}
-                    <div className="flex items-center gap-2 p-2.5 sm:p-3 bg-muted rounded-lg">
-                      <Building className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <span className="text-sm font-medium truncate">{getSelectedCompany()}</span>
+                    {/* Company Selection */}
+                    <div className="space-y-3">
+                      <Label htmlFor="company-select" className="text-sm sm:text-base font-semibold">
+                        Select Company
+                      </Label>
+                      {isLoadingCompanies ? (
+                        <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">Loading companies...</span>
+                        </div>
+                      ) : companies.length > 0 ? (
+                        <Select
+                          value={selectedCompanyId}
+                          onValueChange={setSelectedCompanyId}
+                        >
+                          <SelectTrigger className="h-11">
+                            <SelectValue placeholder="Select a company" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {companies.map((company) => (
+                              <SelectItem key={company._id || company.id} value={company._id || company.id}>
+                                <div className="flex items-center gap-2">
+                                  <Building className="h-4 w-4" />
+                                  {company.name}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900 rounded-lg">
+                          <AlertCircle className="h-4 w-4 text-yellow-600" />
+                          <span className="text-sm text-yellow-900 dark:text-yellow-100">No companies assigned to you</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Document Selection */}
                     <div className="space-y-3">
                       <Label className="text-sm sm:text-base font-semibold">Select Documents ({selectedDocuments.length})</Label>
-                      <div className="border rounded-lg divide-y max-h-[250px] sm:max-h-[300px] overflow-y-auto">
-                        {mockDocuments.map((doc) => (
-                          <div
-                            key={doc.id}
-                            className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 hover:bg-muted/50 transition-colors cursor-pointer"
-                            onClick={() => handleDocumentToggle(doc.id)}
-                          >
-                            <Checkbox
-                              checked={selectedDocuments.includes(doc.id)}
-                              onCheckedChange={() => handleDocumentToggle(doc.id)}
-                              className="flex-shrink-0"
-                            />
-                            <FileText className="h-4 w-4 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs sm:text-sm font-medium truncate">{doc.name}</p>
-                              <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{doc.category}</p>
+                      {isLoadingDocuments ? (
+                        <div className="flex items-center justify-center p-8">
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                        </div>
+                      ) : documents.length > 0 ? (
+                        <div className="border rounded-lg divide-y max-h-[250px] sm:max-h-[300px] overflow-y-auto">
+                          {documents.map((doc) => (
+                            <div
+                              key={doc._id}
+                              className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4 hover:bg-muted/50 transition-colors cursor-pointer"
+                              onClick={() => handleDocumentToggle(doc._id)}
+                            >
+                              <Checkbox
+                                checked={selectedDocuments.includes(doc._id)}
+                                onCheckedChange={() => handleDocumentToggle(doc._id)}
+                                className="flex-shrink-0"
+                              />
+                              <FileText className="h-4 w-4 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs sm:text-sm font-medium truncate">{doc.originalName}</p>
+                                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{doc.category}</p>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-sm text-muted-foreground">
+                          No documents uploaded for this company. Upload documents first from the Documents page.
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -369,7 +568,14 @@ export default function AnalysisPage() {
             {analyses.map((analysis) => (
               <div
                 key={analysis.id}
-                className="flex items-start gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                className={`flex items-start gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors ${
+                  analysis.status === 'completed' ? 'cursor-pointer' : ''
+                }`}
+                onClick={() => {
+                  if (analysis.status === 'completed') {
+                    router.push(`/dashboard/analysis/${analysis.id}`);
+                  }
+                }}
               >
                 {/* Status Icon with Queue Position */}
                 <div className="flex-shrink-0">

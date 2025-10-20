@@ -54,7 +54,7 @@ const navigationItems = {
     { title: 'Companies', icon: Building, href: '/dashboard/clients', badge: '6' },
     { title: 'Documents', icon: FileText, href: '/dashboard/documents', badge: 'New' },
     { title: 'Analysis', icon: BarChart3, href: '/dashboard/analysis', badge: '2' },
-    { title: 'History', icon: Calendar, href: '/dashboard/history', badge: null },
+    { title: 'Compare', icon: Calendar, href: '/dashboard/compare', badge: null },
     { title: 'Reports', icon: FileCheck, href: '/dashboard/reports', badge: null },
   ],
   tools: [
@@ -104,8 +104,8 @@ export default function DashboardLayout({
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {navigationItems.main.map((item) => {
-                        // Only show Companies, Documents, Analysis, and History menu for CA role
-                        if ((item.title === 'Companies' || item.title === 'Documents' || item.title === 'Analysis' || item.title === 'History') && user?.role !== 'ca') {
+                        // Only show Companies, Documents, Analysis, and Compare menu for CA role
+                        if ((item.title === 'Companies' || item.title === 'Documents' || item.title === 'Analysis' || item.title === 'Compare') && user?.role !== 'ca') {
                           return null;
                         }
 

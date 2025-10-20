@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -46,8 +47,13 @@ import {
   RotateCw,
   FolderOpen,
   CheckCircle2,
-  Clock
+  Clock,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
+import { financialAnalysisApi, type JobStatus as AnalysisJobStatus } from '@/lib/financial-analysis-api';
+import { companiesApi, documentsApi } from '@/lib/api';
+import { toast } from 'sonner';
 
 // Document categories
 const documentCategories = [
@@ -126,6 +132,12 @@ const mockDocuments = [
   },
 ];
 
+interface Company {
+  _id: string;
+  id: string;
+  name: string;
+}
+
 export default function DocumentsPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -133,36 +145,202 @@ export default function DocumentsPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<AnalysisJobStatus | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
   const [uploadForm, setUploadForm] = useState({
     category: '',
-    file: null as File | null,
+    companyId: '',
+    files: [] as File[],
   });
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
+  const [selectedCompanyFilter, setSelectedCompanyFilter] = useState<string>('all');
 
   // Redirect if user is not a CA
   useEffect(() => {
     if (user && user.role !== 'ca') {
       router.push('/dashboard');
+    } else if (user && user.role === 'ca') {
+      // Fetch CA's companies
+      fetchCompanies();
     }
   }, [user, router]);
 
+  // Fetch documents when companies are loaded
+  useEffect(() => {
+    if (companies.length > 0) {
+      fetchDocuments(selectedCompanyFilter);
+    }
+  }, [companies, selectedCompanyFilter]);
+
+  const fetchCompanies = async () => {
+    setIsLoadingCompanies(true);
+    try {
+      // Check if user is authenticated
+      const storedUser = localStorage.getItem('user');
+      if (!storedUser) {
+        console.error('No user token found');
+        toast.error('Please login again');
+        router.push('/login');
+        return;
+      }
+
+      const response = await companiesApi.getAll({ limit: 100 });
+      if (response.success && response.data.companies) {
+        setCompanies(response.data.companies);
+        // Auto-select first company if available
+        if (response.data.companies.length > 0 && !uploadForm.companyId) {
+          setUploadForm(prev => ({
+            ...prev,
+            companyId: response.data.companies[0]._id || response.data.companies[0].id
+          }));
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to fetch companies:', error);
+
+      // Handle 401 Unauthorized
+      if (error.message && error.message.includes('Unauthorized')) {
+        toast.error('Session expired. Please login again.');
+        router.push('/login');
+      } else {
+        toast.error('Failed to load companies. Please check if backend is running.');
+      }
+    } finally {
+      setIsLoadingCompanies(false);
+    }
+  };
+
+  const fetchDocuments = async (companyId?: string) => {
+    setIsLoadingDocuments(true);
+    try {
+      let allDocuments: any[] = [];
+
+      if (companyId && companyId !== 'all') {
+        // Fetch documents for specific company
+        const response = await documentsApi.getByCompany(companyId, {});
+        if (response.success && response.data && response.data.documents) {
+          allDocuments = response.data.documents;
+        }
+      } else {
+        // Fetch documents for all companies
+        const companyPromises = companies.map(company =>
+          documentsApi.getByCompany(company._id || company.id, {})
+        );
+        const responses = await Promise.all(companyPromises);
+        responses.forEach(response => {
+          if (response.success && response.data && response.data.documents) {
+            allDocuments = [...allDocuments, ...response.data.documents];
+          }
+        });
+      }
+
+      setDocuments(allDocuments);
+    } catch (error) {
+      console.error('Failed to fetch documents:', error);
+      toast.error('Failed to load documents');
+    } finally {
+      setIsLoadingDocuments(false);
+    }
+  };
+
   const handleRefresh = () => {
     setIsRefreshing(true);
+    fetchDocuments(selectedCompanyFilter);
     setTimeout(() => {
       setIsRefreshing(false);
     }, 1000);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setUploadForm({ ...uploadForm, file: e.target.files[0] });
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      setUploadForm({ ...uploadForm, files: filesArray });
     }
   };
 
-  const handleUpload = () => {
-    // Handle upload logic here
-    console.log('Uploading:', uploadForm);
-    setIsUploadOpen(false);
-    setUploadForm({ category: '', file: null });
+  const handleUpload = async () => {
+    if (!uploadForm.files.length || !uploadForm.companyId) {
+      toast.error('Please select files and a company');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    try {
+      // Find selected company
+      const selectedCompany = companies.find(c =>
+        (c._id || c.id) === uploadForm.companyId
+      );
+
+      if (!selectedCompany) {
+        toast.error('Selected company not found');
+        return;
+      }
+
+      // Upload documents to Node.js backend (MongoDB)
+      const response = await documentsApi.upload(
+        uploadForm.files,
+        uploadForm.companyId,
+        uploadForm.category || undefined
+      );
+
+      if (response.success) {
+        toast.success(`${uploadForm.files.length} document(s) uploaded successfully!`, {
+          description: 'Documents are now available for analysis',
+        });
+
+        setIsUploadOpen(false);
+        setUploadForm({ category: '', companyId: companies[0]?._id || companies[0]?.id || '', files: [] });
+        setUploadProgress(100);
+
+        // Refresh documents list to show new uploads
+        await fetchDocuments(selectedCompanyFilter);
+      } else {
+        toast.error(response.error || 'Failed to upload documents');
+      }
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      toast.error(error.message || 'Failed to upload documents');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const pollJobStatus = async (jobId: string) => {
+    try {
+      await financialAnalysisApi.pollJobStatus(
+        jobId,
+        (status) => {
+          setJobStatus(status);
+          setUploadProgress(status.progress);
+
+          if (status.status === 'processing') {
+            toast.info(status.message, { id: jobId });
+          }
+        }
+      );
+
+      // Job completed
+      const finalStatus = await financialAnalysisApi.getJobStatus(jobId);
+      setJobStatus(finalStatus);
+
+      if (finalStatus.result?.analysis_id) {
+        toast.success('Analysis complete! View results in the Analysis page.', {
+          action: {
+            label: 'View Analysis',
+            onClick: () => router.push(`/dashboard/analysis?id=${finalStatus.result?.analysis_id}`)
+          }
+        });
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Job failed');
+    }
   };
 
   const getFileIcon = (type: string) => {
@@ -180,10 +358,12 @@ export default function DocumentsPage() {
     }
   };
 
-  const filteredDocuments = mockDocuments.filter(doc => {
-    const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         doc.category.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || doc.category === selectedCategory;
+  const filteredDocuments = documents.filter(doc => {
+    const docName = doc.originalName || doc.filename || '';
+    const docCategory = doc.category || '';
+    const matchesSearch = docName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         docCategory.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'all' || docCategory === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -198,10 +378,10 @@ export default function DocumentsPage() {
   };
 
   const stats = [
-    { label: 'Total Documents', value: mockDocuments.length, icon: FileText, color: 'text-blue-600' },
-    { label: 'Verified', value: mockDocuments.filter(d => d.status === 'verified').length, icon: CheckCircle2, color: 'text-green-600' },
-    { label: 'Pending', value: mockDocuments.filter(d => d.status === 'pending').length, icon: Clock, color: 'text-yellow-600' },
-    { label: 'Categories', value: documentCategories.length - 1, icon: FolderOpen, color: 'text-purple-600' },
+    { label: 'Total Documents', value: documents.length, icon: FileText, color: 'text-blue-600' },
+    { label: 'Verified', value: documents.filter(d => d.status === 'analyzed' || d.status === 'verified').length, icon: CheckCircle2, color: 'text-green-600' },
+    { label: 'Pending', value: documents.filter(d => d.status === 'uploaded' || d.status === 'processing' || d.status === 'pending').length, icon: Clock, color: 'text-yellow-600' },
+    { label: 'Categories', value: new Set(documents.map(d => d.category).filter(Boolean)).size, icon: FolderOpen, color: 'text-purple-600' },
   ];
 
   // Show nothing while redirecting non-CA users
@@ -244,10 +424,41 @@ export default function DocumentsPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-6 py-4">
-                {/* Company Info Badge */}
-                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-                  <Building className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">{getSelectedCompany()}</span>
+                {/* Company Selection */}
+                <div className="space-y-3">
+                  <Label htmlFor="company" className="text-base font-semibold">
+                    Select Company
+                  </Label>
+                  {isLoadingCompanies ? (
+                    <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Loading companies...</span>
+                    </div>
+                  ) : companies.length > 0 ? (
+                    <Select
+                      value={uploadForm.companyId}
+                      onValueChange={(value) => setUploadForm({ ...uploadForm, companyId: value })}
+                    >
+                      <SelectTrigger className="h-11">
+                        <SelectValue placeholder="Select a company" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((company) => (
+                          <SelectItem key={company._id || company.id} value={company._id || company.id}>
+                            <div className="flex items-center gap-2">
+                              <Building className="h-4 w-4" />
+                              {company.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900 rounded-lg">
+                      <AlertCircle className="h-4 w-4 text-yellow-600" />
+                      <span className="text-sm text-yellow-900 dark:text-yellow-100">No companies assigned to you</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Category Selection */}
@@ -278,7 +489,7 @@ export default function DocumentsPage() {
                 {/* File Upload Area */}
                 <div className="space-y-3">
                   <Label htmlFor="file" className="text-base font-semibold">
-                    Select File
+                    Select Files (Financial Documents)
                   </Label>
                   <div className="relative">
                     <Input
@@ -286,26 +497,48 @@ export default function DocumentsPage() {
                       type="file"
                       onChange={handleFileChange}
                       accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                      multiple
                       className="cursor-pointer"
+                      disabled={isUploading}
                     />
                   </div>
-                  {uploadForm.file ? (
-                    <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-lg">
-                      <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-green-900 dark:text-green-100 truncate">
-                          {uploadForm.file.name}
-                        </p>
-                        <p className="text-xs text-green-700 dark:text-green-300">
-                          {(uploadForm.file.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                      </div>
+                  {uploadForm.files.length > 0 ? (
+                    <div className="space-y-2">
+                      {uploadForm.files.map((file, index) => (
+                        <div key={index} className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-lg">
+                          <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-green-900 dark:text-green-100 truncate">
+                              {file.name}
+                            </p>
+                            <p className="text-xs text-green-700 dark:text-green-300">
+                              {(file.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 p-4 border-2 border-dashed rounded-lg text-center">
                       <Upload className="h-5 w-5 text-muted-foreground" />
                       <p className="text-sm text-muted-foreground">
-                        PDF, Word, Excel, or Image files supported
+                        PDF, Word, Excel, or Image files supported (Multiple files allowed)
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Upload Progress */}
+                  {isUploading && (
+                    <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                        <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                          {jobStatus?.message || 'Uploading and analyzing documents...'}
+                        </p>
+                      </div>
+                      <Progress value={uploadProgress} className="h-2" />
+                      <p className="text-xs text-blue-700 dark:text-blue-300">
+                        {uploadProgress}% complete
                       </p>
                     </div>
                   )}
@@ -316,19 +549,29 @@ export default function DocumentsPage() {
                   variant="outline"
                   onClick={() => {
                     setIsUploadOpen(false);
-                    setUploadForm({ category: '', file: null });
+                    setUploadForm({ category: '', companyId: companies[0]?._id || companies[0]?.id || '', files: [] });
                   }}
                   className="flex-1 sm:flex-none"
+                  disabled={isUploading}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleUpload}
-                  disabled={!uploadForm.category || !uploadForm.file}
+                  disabled={!uploadForm.files.length || !uploadForm.companyId || isUploading}
                   className="flex-1 sm:flex-none"
                 >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload Document
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Upload & Analyze ({uploadForm.files.length})
+                    </>
+                  )}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -385,50 +628,50 @@ export default function DocumentsPage() {
           <div className="space-y-3">
             {filteredDocuments.map((doc) => (
               <div
-                key={doc.id}
+                key={doc._id || doc.id}
                 className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
               >
                 {/* File Icon */}
                 <div className="flex-shrink-0">
-                  {getFileIcon(doc.type)}
+                  {getFileIcon(doc.fileType || doc.type || 'pdf')}
                 </div>
 
                 {/* Document Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-medium truncate">{doc.name}</h4>
+                      <h4 className="text-sm font-medium truncate">{doc.originalName || doc.filename || doc.name}</h4>
                       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <FolderOpen className="h-3 w-3" />
-                          {doc.category}
+                          {doc.category || 'Uncategorized'}
                         </span>
                         <span className="hidden sm:flex items-center gap-1">
                           <User className="h-3 w-3" />
-                          {doc.uploadedBy}
+                          {doc.uploadedBy?.name || doc.uploadedBy || 'Unknown'}
                         </span>
                         <span className="hidden md:flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(doc.uploadDate).toLocaleDateString()}
+                          {new Date(doc.createdAt || doc.uploadDate).toLocaleDateString()}
                         </span>
                       </div>
                     </div>
                     <Badge
-                      variant={doc.status === 'verified' ? 'default' : 'secondary'}
+                      variant={doc.status === 'analyzed' || doc.status === 'verified' ? 'default' : 'secondary'}
                       className="text-xs flex-shrink-0"
                     >
-                      {doc.status === 'verified' ? (
+                      {doc.status === 'analyzed' || doc.status === 'verified' ? (
                         <>
                           <CheckCircle2 className="h-3 w-3 mr-1" />
                           Verified
                         </>
                       ) : (
-                        'Pending'
+                        doc.status === 'processing' ? 'Processing' : 'Pending'
                       )}
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {doc.size}
+                    {doc.size || (doc.fileSize ? `${(doc.fileSize / (1024 * 1024)).toFixed(2)} MB` : 'Unknown size')}
                   </p>
                 </div>
 
