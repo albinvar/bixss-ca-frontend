@@ -162,17 +162,32 @@ export default function DocumentsPage() {
 
   // Redirect if user is not a CA
   useEffect(() => {
-    if (user && user.role !== 'ca') {
-      router.push('/dashboard');
-    } else if (user && user.role === 'ca') {
+    if (!user) return;
+
+    if (user.role === 'ca') {
       // Fetch CA's companies
       fetchCompanies();
+    } else if (user.role === 'company') {
+      // For company users, fetch documents for their company
+      // company can be either a string (ObjectId) or an object with _id
+      const companyId = typeof user.company === 'string'
+        ? user.company
+        : user.company?._id || user.company?.id;
+      console.log('Company user - companyId:', companyId, 'user.company:', user.company);
+      if (companyId) {
+        fetchDocuments(companyId);
+      } else {
+        console.error('Company user has no company ID');
+      }
+    } else {
+      // Redirect non-CA and non-company users
+      router.push('/dashboard');
     }
   }, [user, router]);
 
-  // Fetch documents when companies are loaded
+  // Fetch documents when companies are loaded (for CA users)
   useEffect(() => {
-    if (companies.length > 0) {
+    if (user?.role === 'ca' && companies.length > 0) {
       fetchDocuments(selectedCompanyFilter);
     }
   }, [companies, selectedCompanyFilter]);
@@ -372,7 +387,8 @@ export default function DocumentsPage() {
       return user.selectedCompany.name;
     }
     if (user?.role === 'company' && user.company) {
-      return user.company.name;
+      // company can be a string (ObjectId) or object with name
+      return typeof user.company === 'string' ? 'Your Company' : user.company.name;
     }
     return 'All Companies';
   };
@@ -384,8 +400,8 @@ export default function DocumentsPage() {
     { label: 'Categories', value: new Set(documents.map(d => d.category).filter(Boolean)).size, icon: FolderOpen, color: 'text-purple-600' },
   ];
 
-  // Show nothing while redirecting non-CA users
-  if (!user || user.role !== 'ca') {
+  // Show nothing while loading or for unauthorized users
+  if (!user || (user.role !== 'ca' && user.role !== 'company')) {
     return null;
   }
 
@@ -409,13 +425,15 @@ export default function DocumentsPage() {
           >
             <RotateCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
-          <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Upload className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Upload</span>
-              </Button>
-            </DialogTrigger>
+          {/* Only show upload for CA users */}
+          {user?.role === 'ca' && (
+            <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Upload className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Upload</span>
+                </Button>
+              </DialogTrigger>
             <DialogContent className="sm:max-w-[550px]">
               <DialogHeader>
                 <DialogTitle className="text-2xl">Upload Document</DialogTitle>
@@ -576,6 +594,7 @@ export default function DocumentsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 

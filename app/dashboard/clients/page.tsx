@@ -15,6 +15,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import {
   Building,
   MoreHorizontal,
@@ -32,100 +34,28 @@ import {
   RotateCw,
   ShieldAlert
 } from 'lucide-react';
+import { companiesApi } from '@/lib/api';
 
-// Mock clients data
-const clients = [
-  {
-    id: 1,
-    name: 'Tech Solutions Inc.',
-    email: 'contact@techsolutions.com',
-    phone: '+91 98765 43210',
-    industry: 'Technology',
-    size: '50-200',
-    status: 'active',
-    location: 'Mumbai, Maharashtra',
-    joinDate: '2024-01-15',
-    revenue: '₹12.5L',
-    pendingTasks: 5,
-    completedTasks: 45,
-    lastActivity: '2 hours ago',
-  },
-  {
-    id: 2,
-    name: 'Global Finance Corp',
-    email: 'info@globalfinance.com',
-    phone: '+91 98765 43211',
-    industry: 'Finance',
-    size: '200-500',
-    status: 'active',
-    location: 'Delhi, NCR',
-    joinDate: '2024-02-20',
-    revenue: '₹8.3L',
-    pendingTasks: 3,
-    completedTasks: 32,
-    lastActivity: '1 day ago',
-  },
-  {
-    id: 3,
-    name: 'Retail Masters Ltd',
-    email: 'hello@retailmasters.com',
-    phone: '+91 98765 43212',
-    industry: 'Retail',
-    size: '10-50',
-    status: 'active',
-    location: 'Bangalore, Karnataka',
-    joinDate: '2024-03-10',
-    revenue: '₹6.7L',
-    pendingTasks: 7,
-    completedTasks: 28,
-    lastActivity: '3 hours ago',
-  },
-  {
-    id: 4,
-    name: 'Healthcare Plus',
-    email: 'admin@healthcareplus.com',
-    phone: '+91 98765 43213',
-    industry: 'Healthcare',
-    size: '100-200',
-    status: 'pending',
-    location: 'Pune, Maharashtra',
-    joinDate: '2024-04-05',
-    revenue: '₹4.2L',
-    pendingTasks: 2,
-    completedTasks: 15,
-    lastActivity: '5 days ago',
-  },
-  {
-    id: 5,
-    name: 'Manufacturing Pro',
-    email: 'contact@mfgpro.com',
-    phone: '+91 98765 43214',
-    industry: 'Manufacturing',
-    size: '500-1000',
-    status: 'inactive',
-    location: 'Chennai, Tamil Nadu',
-    joinDate: '2023-12-01',
-    revenue: '₹15.8L',
-    pendingTasks: 0,
-    completedTasks: 67,
-    lastActivity: '2 months ago',
-  },
-  {
-    id: 6,
-    name: 'EduTech Innovators',
-    email: 'info@edutech.in',
-    phone: '+91 98765 43215',
-    industry: 'Education',
-    size: '50-100',
-    status: 'active',
-    location: 'Hyderabad, Telangana',
-    joinDate: '2024-05-12',
-    revenue: '₹5.9L',
-    pendingTasks: 4,
-    completedTasks: 22,
-    lastActivity: '4 hours ago',
-  },
-];
+interface Company {
+  _id?: string;
+  id?: string;
+  name: string;
+  representative?: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  contactInfo?: {
+    email?: string;
+    phone?: string;
+    address?: string;
+  };
+  industry?: string;
+  status?: 'active' | 'pending' | 'inactive';
+  createdAt?: string;
+  description?: string;
+  registrationNumber?: string;
+}
 
 export default function ClientsPage() {
   const { user } = useAuth();
@@ -133,6 +63,8 @@ export default function ClientsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [companies, setCompanies] = useState<Company[]>([]);
 
   // Redirect if user is not a CA
   useEffect(() => {
@@ -141,12 +73,34 @@ export default function ClientsPage() {
     }
   }, [user, router]);
 
-  const handleRefresh = () => {
+  // Fetch companies on mount
+  useEffect(() => {
+    fetchCompanies();
+  }, []);
+
+  const fetchCompanies = async () => {
+    try {
+      setIsLoading(true);
+      const response = await companiesApi.getAll({ limit: 100 });
+
+      if (response.success && response.data && response.data.companies) {
+        setCompanies(response.data.companies);
+      } else {
+        setCompanies([]);
+      }
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+      toast.error('Failed to load companies');
+      setCompanies([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    // Simulate refresh action
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 1000);
+    await fetchCompanies();
+    setIsRefreshing(false);
   };
 
   const getStatusIcon = (status: string) => {
@@ -175,13 +129,16 @@ export default function ClientsPage() {
     }
   };
 
-  const filteredClients = clients.filter(client => {
-    const matchesSearch = client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         client.industry.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredCompanies = companies.filter(company => {
+    const email = company.representative?.email || company.contactInfo?.email || '';
+    const industry = company.industry || '';
+
+    const matchesSearch = company.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         industry.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (activeTab === 'all') return matchesSearch;
-    return matchesSearch && client.status === activeTab;
+    return matchesSearch && company.status === activeTab;
   });
 
   // Show nothing while redirecting non-CA users
@@ -241,104 +198,148 @@ export default function ClientsPage() {
 
         {/* Clients Grid */}
         <CardContent className="p-4 sm:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredClients.map((client) => (
-              <Card key={client.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Card key={i}>
+                  <CardHeader className="pb-3">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback className="text-sm">
-                          {client.name.split(' ').map(n => n[0]).join('')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <CardTitle className="text-base">{client.name}</CardTitle>
-                        <CardDescription className="text-xs">{client.industry}</CardDescription>
+                      <Skeleton className="h-10 w-10 rounded-full" />
+                      <div className="flex-1">
+                        <Skeleton className="h-4 w-32 mb-2" />
+                        <Skeleton className="h-3 w-20" />
                       </div>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Eye className="mr-2 h-4 w-4" />
-                          View Details
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Edit className="mr-2 h-4 w-4" />
-                          Update Info
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <FileText className="mr-2 h-4 w-4" />
-                          Generate Report
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Download className="mr-2 h-4 w-4" />
-                          Export Data
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Badge variant={getStatusVariant(client.status)} className="text-xs">
-                      {getStatusIcon(client.status)}
-                      <span className="ml-1 capitalize">{client.status}</span>
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{client.size} employees</span>
-                  </div>
-
-                  <div className="space-y-2 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-3 w-3 flex-shrink-0" />
-                      <span className="truncate">{client.email}</span>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Skeleton className="h-6 w-20" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-full" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-3 w-3 flex-shrink-0" />
-                      <span>{client.phone}</span>
+                    <div className="pt-3 border-t space-y-2">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-full" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-3 w-3 flex-shrink-0" />
-                      <span>{client.location}</span>
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Revenue</span>
-                      <span className="font-semibold">{client.revenue}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Tasks</span>
-                      <span>
-                        <span className="font-semibold text-orange-600">{client.pendingTasks}</span>
-                        <span className="text-muted-foreground"> / </span>
-                        <span className="text-green-600">{client.completedTasks}</span>
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>Last activity</span>
-                      <span>{client.lastActivity}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {filteredClients.length === 0 && (
-            <div className="text-center py-12">
-              <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No companies found</h3>
-              <p className="text-sm text-muted-foreground">
-                Try adjusting your search or filters
-              </p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredCompanies.map((company) => {
+                  const companyId = company._id || company.id;
+                  const email = company.representative?.email || company.contactInfo?.email || 'N/A';
+                  const phone = company.contactInfo?.phone || 'N/A';
+                  const address = company.contactInfo?.address || 'N/A';
+                  const status = company.status || 'active';
+
+                  return (
+                    <Card key={companyId} className="hover:shadow-md transition-shadow">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-10 w-10">
+                              <AvatarFallback className="text-sm">
+                                {company.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <CardTitle className="text-base">{company.name}</CardTitle>
+                              <CardDescription className="text-xs">
+                                {company.industry || 'N/A'}
+                              </CardDescription>
+                            </div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => router.push(`/dashboard/companies/${companyId}`)}>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => router.push(`/dashboard/documents?companyId=${companyId}`)}>
+                                <FileText className="mr-2 h-4 w-4" />
+                                View Documents
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => router.push(`/dashboard/analysis?companyId=${companyId}`)}>
+                                <FileText className="mr-2 h-4 w-4" />
+                                Analyze Documents
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge variant={getStatusVariant(status)} className="text-xs">
+                            {getStatusIcon(status)}
+                            <span className="ml-1 capitalize">{status}</span>
+                          </Badge>
+                          {company.registrationNumber && (
+                            <span className="text-xs text-muted-foreground">
+                              Reg: {company.registrationNumber}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">{email}</span>
+                          </div>
+                          {phone !== 'N/A' && (
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-3 w-3 flex-shrink-0" />
+                              <span>{phone}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">{address}</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-3 border-t space-y-2">
+                          {company.representative && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Representative</span>
+                              <span className="font-medium truncate ml-2">
+                                {company.representative.name}
+                              </span>
+                            </div>
+                          )}
+                          {company.createdAt && (
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>Joined</span>
+                              <span>{new Date(company.createdAt).toLocaleDateString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+
+              {filteredCompanies.length === 0 && !isLoading && (
+                <div className="text-center py-12">
+                  <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No companies found</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {companies.length === 0
+                      ? 'No companies assigned to you yet'
+                      : 'Try adjusting your search or filters'}
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

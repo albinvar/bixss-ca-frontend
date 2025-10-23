@@ -46,9 +46,13 @@ import {
   RotateCw,
   AlertCircle,
   PlayCircle,
-  Sparkles
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  MessageSquare
 } from 'lucide-react';
-import { companiesApi, documentsApi } from '@/lib/api';
+import AnalysisNotes from '@/components/analysis-notes';
+import { companiesApi, documentsApi, benchmarksApi } from '@/lib/api';
 import { financialAnalysisApi } from '@/lib/financial-analysis-api';
 import { analysisApi } from '@/lib/api';
 import { toast } from 'sonner';
@@ -85,13 +89,30 @@ export default function AnalysisPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
+  const [expandedAnalysisId, setExpandedAnalysisId] = useState<string | null>(null);
 
-  // Redirect if user is not a CA
+  // Redirect if user is not authorized
   useEffect(() => {
-    if (user && user.role !== 'ca') {
-      router.push('/dashboard');
-    } else if (user && user.role === 'ca') {
+    if (!user) return;
+
+    if (user.role === 'ca') {
       fetchCompanies();
+    } else if (user.role === 'company') {
+      // For company users, set their company as selected
+      const companyId = user?.company?._id || user?.company;
+      console.log('Company user - companyId:', companyId, 'user.company:', user.company);
+      if (companyId) {
+        setSelectedCompanyId(companyId);
+        // Set company name for display
+        if (user.company?.name) {
+          setSelectedCompany({ id: companyId, name: user.company.name });
+        }
+      } else {
+        console.error('Company user has no company ID');
+      }
+    } else {
+      // Redirect non-CA and non-company users
+      router.push('/dashboard');
     }
   }, [user, router]);
 
@@ -217,6 +238,7 @@ export default function AnalysisPage() {
       const documentIds = selectedDocs.map(doc => doc._id);
 
       // Call Node.js backend which proxies to Python microservice
+      // Benchmarks will be automatically fetched by the backend
       const response = await analysisApi.trigger(
         documentIds,
         selectedCompanyId,
@@ -378,8 +400,8 @@ export default function AnalysisPage() {
     }
   };
 
-  // Show nothing while redirecting non-CA users
-  if (!user || user.role !== 'ca') {
+  // Show nothing while loading or for unauthorized users
+  if (!user || (user.role !== 'ca' && user.role !== 'company')) {
     return null;
   }
 
@@ -403,14 +425,16 @@ export default function AnalysisPage() {
           >
             <RotateCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
-          <Dialog open={isNewAnalysisOpen} onOpenChange={setIsNewAnalysisOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">New Analysis</span>
-                <span className="sm:hidden">New</span>
-              </Button>
-            </DialogTrigger>
+          {/* Only show new analysis button for CA users */}
+          {user?.role === 'ca' && (
+            <Dialog open={isNewAnalysisOpen} onOpenChange={setIsNewAnalysisOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">New Analysis</span>
+                  <span className="sm:hidden">New</span>
+                </Button>
+              </DialogTrigger>
             <DialogContent className="sm:max-w-[600px] max-w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="text-lg sm:text-2xl">Start New Analysis</DialogTitle>
@@ -543,6 +567,7 @@ export default function AnalysisPage() {
               )}
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
@@ -677,6 +702,36 @@ export default function AnalysisPage() {
                     <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                       <CheckCircle2 className="h-3 w-3 text-green-600 flex-shrink-0" />
                       <span>{analysis.reports.length} report{analysis.reports.length > 1 ? 's' : ''} ready</span>
+                    </div>
+                  )}
+
+                  {/* Show Notes Button (only for completed analyses) */}
+                  {analysis.status === 'completed' && (
+                    <div className="mt-4 pt-4 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedAnalysisId(expandedAnalysisId === analysis.id ? null : analysis.id);
+                        }}
+                        className="w-full"
+                      >
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        {expandedAnalysisId === analysis.id ? 'Hide' : 'Show'} CA Notes
+                        {expandedAnalysisId === analysis.id ? (
+                          <ChevronUp className="h-4 w-4 ml-auto" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 ml-auto" />
+                        )}
+                      </Button>
+
+                      {/* Notes Component */}
+                      {expandedAnalysisId === analysis.id && (
+                        <div className="mt-4" onClick={(e) => e.stopPropagation()}>
+                          <AnalysisNotes analysisId={analysis.id} />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

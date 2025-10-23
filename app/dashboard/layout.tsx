@@ -36,10 +36,10 @@ import {
   Calendar,
   BarChart3,
   Shield,
-  FileCheck,
   Receipt,
   Briefcase,
-  ChevronRight
+  ChevronRight,
+  Target
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -55,18 +55,11 @@ const navigationItems = {
     { title: 'Documents', icon: FileText, href: '/dashboard/documents', badge: 'New' },
     { title: 'Analysis', icon: BarChart3, href: '/dashboard/analysis', badge: '2' },
     { title: 'Compare', icon: Calendar, href: '/dashboard/compare', badge: null },
-    { title: 'Reports', icon: FileCheck, href: '/dashboard/reports', badge: null },
-  ],
-  tools: [
-    { title: 'Calculator', icon: Calculator, href: '/dashboard/calculator' },
-    { title: 'Calendar', icon: Calendar, href: '/dashboard/calendar' },
-    { title: 'Analytics', icon: TrendingUp, href: '/dashboard/analytics' },
-    { title: 'Projects', icon: Briefcase, href: '/dashboard/projects' },
+    { title: 'Benchmarks', icon: Target, href: '/dashboard/benchmarks', badge: null, caOnly: true },
   ],
   admin: [
-    { title: 'User Management', icon: Users, href: '/dashboard/users' },
-    { title: 'System Settings', icon: Shield, href: '/dashboard/system' },
-    { title: 'Audit Logs', icon: FolderOpen, href: '/dashboard/audit' },
+    { title: 'Manage CAs', icon: Users, href: '/dashboard/admin/cas' },
+    { title: 'Manage Companies', icon: Building, href: '/dashboard/admin/companies' },
   ]
 };
 
@@ -103,9 +96,19 @@ export default function DashboardLayout({
                   <SidebarGroupLabel>Main</SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {navigationItems.main.map((item) => {
-                        // Only show Companies, Documents, Analysis, and Compare menu for CA role
-                        if ((item.title === 'Companies' || item.title === 'Documents' || item.title === 'Analysis' || item.title === 'Compare') && user?.role !== 'ca') {
+                      {navigationItems.main.map((item: any) => {
+                        // Hide CA-only items for non-CA users
+                        if (item.caOnly && user?.role !== 'ca') {
+                          return null;
+                        }
+
+                        // Hide CA-specific items for company users (Companies, Compare)
+                        if (user?.role === 'company' && (item.title === 'Companies' || item.title === 'Compare')) {
+                          return null;
+                        }
+
+                        // Hide Documents and Analysis for admin (show for both CA and company)
+                        if (user?.role === 'admin' && (item.title === 'Documents' || item.title === 'Analysis')) {
                           return null;
                         }
 
@@ -131,28 +134,6 @@ export default function DashboardLayout({
                           </SidebarMenuItem>
                         );
                       })}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-
-                {/* Tools */}
-                <SidebarGroup>
-                  <SidebarGroupLabel>Tools</SidebarGroupLabel>
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {navigationItems.tools.map((item) => (
-                        <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={pathname === item.href}
-                          >
-                            <Link href={item.href}>
-                              <item.icon className="h-4 w-4" />
-                              <span>{item.title}</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      ))}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </SidebarGroup>

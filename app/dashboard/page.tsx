@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
+import { useRouter } from 'next/navigation';
+import CADashboard from '@/components/CADashboard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -24,7 +27,10 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
-  Receipt
+  Receipt,
+  Mail,
+  Phone,
+  MapPin
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -33,6 +39,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { companiesApi, analysisApi, documentsApi } from '@/lib/api';
+import { toast } from 'sonner';
 
 // Mock dashboard data
 const statsData = [
@@ -98,7 +106,15 @@ const clientOverview = [
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // If user is admin role, redirect to admin dashboard
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      router.push('/dashboard/admin');
+    }
+  }, [user, router]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -114,6 +130,16 @@ export default function DashboardPage() {
       setIsRefreshing(false);
     }, 1000);
   };
+
+  // If user is CA role, show CA dashboard
+  if (user?.role === 'ca') {
+    return <CADashboard user={user} />;
+  }
+
+  // If user is company role, show company dashboard
+  if (user?.role === 'company') {
+    return <CompanyDashboard user={user} />;
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -344,6 +370,161 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// Company Dashboard Component
+function CompanyDashboard({ user }: { user: any }) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [company, setCompany] = useState<any>(null);
+  const [analyses, setAnalyses] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Company can be an object with _id or just a string ID
+    const companyId = user?.company?._id || user?.company;
+    if (companyId) {
+      fetchCompanyData(companyId);
+    } else {
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  const fetchCompanyData = async (companyId: string) => {
+    try {
+      setIsLoading(true);
+
+      // Fetch company details, analyses, and documents in parallel
+      const [companyRes, analysisRes, documentsRes] = await Promise.all([
+        companiesApi.getById(companyId),
+        analysisApi.getHistory(companyId, 10).catch(() => ({ success: false })),
+        documentsApi.getByCompany(companyId).catch(() => ({ success: false }))
+      ]);
+
+      if (companyRes.success && companyRes.data.company) {
+        setCompany(companyRes.data.company);
+      }
+
+      if (analysisRes.success && analysisRes.data?.analyses) {
+        setAnalyses(analysisRes.data.analyses.slice(0, 5));
+      }
+
+      if (documentsRes.success && documentsRes.data?.documents) {
+        setDocuments(documentsRes.data.documents.slice(0, 5));
+      }
+    } catch (error) {
+      console.error('Error fetching company data:', error);
+      toast.error('Failed to load company information');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Welcome Header */}
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+          {getGreeting()}, {user?.name}!
+        </h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1">
+          {company?.name || 'Your company'} dashboard
+        </p>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-6">
+          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      ) : (
+        <>
+          {/* Company Info Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Building className="h-5 w-5" />
+                Company Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Company Name</p>
+                    <p className="text-base font-medium">{company?.name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Industry</p>
+                    <p className="text-base font-medium">{company?.industry || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Registration Number</p>
+                    <p className="text-base font-medium">{company?.registrationNumber || 'N/A'}</p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">{company?.contactInfo?.email || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">{company?.contactInfo?.phone || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">{company?.contactInfo?.address || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Assigned CAs Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Assigned Chartered Accountants
+              </CardTitle>
+              <CardDescription>Your company's CA professionals</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {company?.invitedCAs && company.invitedCAs.length > 0 ? (
+                <div className="space-y-3">
+                  {company.invitedCAs.map((invite: any) => (
+                    <div key={invite._id} className="flex items-center gap-3 p-3 border rounded-lg">
+                      <Avatar>
+                        <AvatarFallback>
+                          {invite.ca?.name?.charAt(0) || 'CA'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{invite.ca?.name || 'CA'}</p>
+                        <p className="text-xs text-muted-foreground">{invite.ca?.email || ''}</p>
+                      </div>
+                      <Badge variant="default">Active</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-sm text-muted-foreground">
+                  No CAs assigned yet
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }

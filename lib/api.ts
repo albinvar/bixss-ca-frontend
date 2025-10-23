@@ -293,13 +293,207 @@ export const analysisApi = {
   },
 
   // Trigger analysis (proxy to Python)
-  trigger: (documentIds: string[], companyId: string, companyName: string, analysisType: string = 'comprehensive') =>
+  trigger: (documentIds: string[], companyId: string, companyName: string, analysisType: string = 'comprehensive', industry?: string, benchmarkId?: string) =>
     apiClient.post<{ success: boolean; data: any }>('/analysis/trigger', {
       documentIds,
       companyId,
       companyName,
-      analysisType
+      analysisType,
+      industry,
+      benchmarkId
     }),
+
+  // Export analysis as PDF
+  exportPDF: async (analysisId: string, charts: Record<string, string>): Promise<Blob> => {
+    const token = apiClient['getAuthToken']();
+    const response = await fetch(`${API_URL}/api/pdf/analysis/${analysisId}/export`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      body: JSON.stringify({ charts }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to export PDF');
+    }
+
+    return await response.blob();
+  },
+};
+
+// Benchmarks API
+export const benchmarksApi = {
+  getAll: (industry?: string) => {
+    const query = industry ? `?industry=${industry}` : '';
+    return apiClient.get<{ success: boolean; data: { benchmarks: any[] } }>(`/benchmarks${query}`);
+  },
+
+  getById: (benchmarkId: string) =>
+    apiClient.get<{ success: boolean; data: { benchmark: any } }>(`/benchmarks/${benchmarkId}`),
+
+  getDefault: (industry: string = 'General') =>
+    apiClient.get<{ success: boolean; data: { benchmark: any } }>(`/benchmarks/default?industry=${industry}`),
+
+  getIndustries: () =>
+    apiClient.get<{ success: boolean; data: { industries: string[] } }>('/benchmarks/industries'),
+
+  create: (data: any) =>
+    apiClient.post<{ success: boolean; data: { benchmark: any } }>('/benchmarks', data),
+
+  update: (benchmarkId: string, data: any) =>
+    apiClient.put<{ success: boolean; data: { benchmark: any } }>(`/benchmarks/${benchmarkId}`, data),
+
+  delete: (benchmarkId: string) =>
+    apiClient.delete<{ success: boolean }>(`/benchmarks/${benchmarkId}`),
+};
+
+// Analysis Notes API
+export const analysisNotesApi = {
+  getByAnalysis: (analysisId: string) =>
+    apiClient.get<{ success: boolean; data: { notes: any[] } }>(`/analysis-notes/analysis/${analysisId}`),
+
+  getByCompany: (companyId: string) =>
+    apiClient.get<{ success: boolean; data: { notes: any[] } }>(`/analysis-notes/company/${companyId}`),
+
+  create: (data: {
+    analysisId: string;
+    title?: string;
+    content: string;
+    noteType?: 'general' | 'concern' | 'recommendation' | 'highlight';
+    isPrivate?: boolean;
+    attachments?: any[];
+  }) =>
+    apiClient.post<{ success: boolean; data: { note: any } }>('/analysis-notes', data),
+
+  update: (noteId: string, data: {
+    title?: string;
+    content?: string;
+    noteType?: 'general' | 'concern' | 'recommendation' | 'highlight';
+    isPrivate?: boolean;
+    attachments?: any[];
+  }) =>
+    apiClient.put<{ success: boolean; data: { note: any } }>(`/analysis-notes/${noteId}`, data),
+
+  delete: (noteId: string) =>
+    apiClient.delete<{ success: boolean }>(`/analysis-notes/${noteId}`),
+};
+
+// Admin API
+export const adminApi = {
+  // Dashboard Analytics
+  getAnalytics: () =>
+    apiClient.get<{
+      success: boolean;
+      data: {
+        overview: any;
+        growth: any;
+        companiesByIndustry: any[];
+        topCAs: any[];
+        recentActivities: any[];
+        systemHealth: any;
+      }
+    }>('/admin/analytics'),
+
+  // CA Management
+  getAllCAs: (params?: { page?: number; limit?: number; search?: string; status?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.status) queryParams.append('status', params.status);
+
+    const query = queryParams.toString();
+    return apiClient.get<{
+      success: boolean;
+      data: {
+        cas: any[];
+        totalPages: number;
+        currentPage: number;
+        total: number;
+      }
+    }>(`/admin/cas${query ? `?${query}` : ''}`);
+  },
+
+  getCADetails: (caId: string) =>
+    apiClient.get<{
+      success: boolean;
+      data: {
+        ca: any;
+        assignedCompanies: any[];
+        invitedCompanies: any[];
+        stats: any;
+        recentAnalyses: any[];
+      }
+    }>(`/admin/cas/${caId}`),
+
+  createCA: (data: { name: string; email: string; password: string }) =>
+    apiClient.post<{ success: boolean; data: { ca: any } }>('/admin/cas', data),
+
+  updateCA: (caId: string, data: { name?: string; email?: string; isActive?: boolean }) =>
+    apiClient.put<{ success: boolean; data: { ca: any } }>(`/admin/cas/${caId}`, data),
+
+  deleteCA: (caId: string) =>
+    apiClient.delete<{ success: boolean }>(`/admin/cas/${caId}`),
+
+  assignCompanies: (caId: string, companyIds: string[]) =>
+    apiClient.post<{ success: boolean; data: { ca: any } }>(
+      `/admin/cas/${caId}/assign-companies`,
+      { companyIds }
+    ),
+
+  removeCompanies: (caId: string, companyIds: string[]) =>
+    apiClient.post<{ success: boolean }>(`/admin/cas/${caId}/remove-companies`, { companyIds }),
+};
+
+/**
+ * CA Dashboard API
+ */
+export const caApi = {
+  getDashboard: () =>
+    apiClient.get<{
+      success: boolean;
+      data: {
+        metrics: {
+          assignedCompanies: number;
+          newCompaniesThisMonth: number;
+          totalAnalyses: number;
+          recentAnalyses: number;
+          totalDocuments: number;
+          recentDocuments: number;
+          analysisStatus: {
+            completed: number;
+            processing: number;
+            failed: number;
+          };
+          successRate: number;
+        };
+        recentActivities: Array<{
+          type: string;
+          action: string;
+          company: string;
+          timestamp: string;
+          status: string;
+          analysisId?: string;
+        }>;
+        companies: Array<{
+          _id: string;
+          name: string;
+          industry: string;
+          totalAnalyses: number;
+          totalDocuments: number;
+          lastAnalysisDate: string | null;
+          lastAnalysisStatus: string | null;
+          daysSinceLastActivity: number | null;
+        }>;
+        companiesNeedingAttention: any[];
+        analysisTrend: Array<{
+          _id: string;
+          count: number;
+        }>;
+      };
+    }>('/ca/dashboard'),
 };
 
 export default apiClient;

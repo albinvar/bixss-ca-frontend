@@ -25,6 +25,7 @@ import { analysisApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { MetricsSection } from './components/MetricsSection';
 import { OutlookSection } from './components/OutlookSection';
+import { captureAnalysisCharts, downloadBlob } from '@/lib/chart-export';
 
 export default function AnalysisDetailPage() {
   const params = useParams();
@@ -34,6 +35,7 @@ export default function AnalysisDetailPage() {
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     if (analysisId) {
@@ -56,6 +58,37 @@ export default function AnalysisDetailPage() {
       toast.error('Failed to load analysis details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!analysis) return;
+
+    setIsExporting(true);
+    try {
+      toast.info('Capturing charts...');
+
+      // Find the main content container
+      const contentElement = document.querySelector('[data-analysis-content]') as HTMLElement;
+
+      // Capture all charts
+      const charts = contentElement ? await captureAnalysisCharts(contentElement) : {};
+
+      toast.info('Generating PDF...');
+
+      // Call backend to generate PDF
+      const pdfBlob = await analysisApi.exportPDF(analysisId, charts);
+
+      // Download the PDF
+      const filename = `Analysis_${analysis.company_information?.name || 'Report'}_${analysisId}.pdf`;
+      downloadBlob(pdfBlob, filename);
+
+      toast.success('PDF exported successfully!');
+    } catch (error: any) {
+      console.error('Export error:', error);
+      toast.error('Failed to export PDF: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -124,16 +157,30 @@ export default function AnalysisDetailPage() {
                 </span>
               </div>
             </div>
-            <Button variant="outline" className="gap-2">
-              <Download className="h-4 w-4" />
-              Export PDF
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleExportPDF}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  Export PDF
+                </>
+              )}
             </Button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8" data-analysis-content>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3 lg:w-auto">
             <TabsTrigger value="overview" className="gap-2">
@@ -163,17 +210,21 @@ export default function AnalysisDetailPage() {
 
           {/* METRICS TAB */}
           <TabsContent value="metrics" className="space-y-6">
-            <MetricsSection metrics={metrics} />
+            <div data-chart-name="financial_metrics">
+              <MetricsSection metrics={metrics} />
+            </div>
           </TabsContent>
 
           {/* OUTLOOK TAB */}
           <TabsContent value="outlook" className="space-y-6">
-            <OutlookSection
-              healthAnalysis={healthAnalysis}
-              trendAnalysis={trendAnalysis}
-              riskAssessment={riskAssessment}
-              industryBench={industryBench}
-            />
+            <div data-chart-name="outlook_analysis">
+              <OutlookSection
+                healthAnalysis={healthAnalysis}
+                trendAnalysis={trendAnalysis}
+                riskAssessment={riskAssessment}
+                industryBench={industryBench}
+              />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
