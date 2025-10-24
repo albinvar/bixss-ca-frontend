@@ -284,7 +284,15 @@ export default function CADashboard({ user }: { user: any }) {
                       <p className="text-sm font-medium">{activity.action}</p>
                       <p className="text-xs text-muted-foreground">{activity.company} • {formatTimestamp(activity.timestamp)}</p>
                     </div>
-                    <Button variant="ghost" size="sm">View</Button>
+                    {activity.analysisId && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => router.push(`/dashboard/analysis/${activity.analysisId}`)}
+                      >
+                        View
+                      </Button>
+                    )}
                   </div>
                 ))
               ) : (

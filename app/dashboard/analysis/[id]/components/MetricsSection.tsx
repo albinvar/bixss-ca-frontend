@@ -22,23 +22,27 @@ export function MetricsSection({ metrics }: MetricsSectionProps) {
     <div className="space-y-8">
       {categories.map((category) => {
         const categoryData = metrics[category.key];
-        if (!categoryData) return null;
+        if (!categoryData || !Array.isArray(categoryData)) return null;
 
         return (
-          <div key={category.key}>
-            <div className="mb-4">
-              <h3 className="text-xl font-semibold flex items-center gap-2">
-                <span>{category.icon}</span>
-                {category.title}
-              </h3>
-              <p className="text-sm text-muted-foreground mt-1">{category.description}</p>
+          <div key={category.key} className="p-6 rounded-2xl bg-gradient-to-br from-white/60 to-slate-50/60 dark:from-slate-900/60 dark:to-slate-800/60 backdrop-blur-sm border border-slate-200/40 dark:border-slate-800/40 shadow-lg">
+            <div className="mb-6">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-md">
+                  <span className="text-2xl">{category.icon}</span>
+                </div>
+                <h3 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
+                  {category.title}
+                </h3>
+              </div>
+              <p className="text-sm text-slate-600 dark:text-slate-400 ml-14">{category.description}</p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {Object.entries(categoryData).map(([metricKey, metricData]: [string, any]) => (
+              {categoryData.map((metricData: any, index: number) => (
                 <MetricCard
-                  key={metricKey}
-                  name={formatMetricName(metricKey)}
+                  key={index}
+                  name={metricData.metric || `Metric ${index + 1}`}
                   data={metricData}
                 />
               ))}
@@ -51,19 +55,22 @@ export function MetricsSection({ metrics }: MetricsSectionProps) {
 }
 
 function MetricCard({ name, data }: { name: string; data: any }) {
-  if (!data || !data.current_year) return null;
+  // Handle array-based metrics structure from Gemini
+  if (!data) return null;
 
-  const currentYear = data.current_year;
-  const previousYear = data.previous_year;
-  const currentValue = currentYear.value;
-  const previousValue = previousYear?.value;
-  const benchmark = currentYear.benchmark;
-  const interpretation = currentYear.interpretation;
-  const formula = currentYear.formula;
-  const calculation = currentYear.calculation;
+  // Extract values - data is an array element with currentYear, previousYear, etc.
+  const currentValue = typeof data.currentYear === 'string'
+    ? parseFloat(data.currentYear.replace(/[^0-9.-]/g, '')) || data.currentYear
+    : data.currentYear;
+  const previousValue = typeof data.previousYear === 'string'
+    ? parseFloat(data.previousYear.replace(/[^0-9.-]/g, '')) || data.previousYear
+    : data.previousYear;
+  const benchmark = data.benchmark;
+  const formula = data.formula;
+  const commentary = data.commentary;
 
   // Calculate trend
-  const trend = previousValue !== null && previousValue !== undefined
+  const trend = (previousValue !== null && previousValue !== undefined && typeof currentValue === 'number' && typeof previousValue === 'number')
     ? ((currentValue - previousValue) / Math.abs(previousValue)) * 100
     : null;
 
@@ -113,19 +120,19 @@ function MetricCard({ name, data }: { name: string; data: any }) {
   const progressValue = getProgressValue();
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <CardTitle className="text-base font-semibold">{name}</CardTitle>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-2xl font-bold">
+            <CardTitle className="text-base font-semibold text-slate-700 dark:text-slate-300">{name}</CardTitle>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent">
                 {typeof currentValue === 'number'
                   ? currentValue.toFixed(2)
                   : currentValue}
               </span>
               {trend !== null && (
-                <Badge variant={trend >= 0 ? "default" : "destructive"} className="gap-1">
+                <Badge variant={trend >= 0 ? "default" : "destructive"} className="gap-1 shadow-sm">
                   {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                   {Math.abs(trend).toFixed(1)}%
                 </Badge>
@@ -134,7 +141,7 @@ function MetricCard({ name, data }: { name: string; data: any }) {
           </div>
           <Badge
             variant={status === 'good' ? 'default' : status === 'fair' ? 'secondary' : 'destructive'}
-            className="ml-2"
+            className="ml-2 shadow-sm"
           >
             {status === 'good' ? '🟢 Good' : status === 'fair' ? '🟡 Fair' : '🔴 Poor'}
           </Badge>
@@ -144,37 +151,43 @@ function MetricCard({ name, data }: { name: string; data: any }) {
       <CardContent className="space-y-3">
         {/* Progress Bar */}
         {benchmark && (
-          <div className="space-y-1">
-            <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400 font-medium">
               <span>vs Benchmark: {benchmark}</span>
               <span>{progressValue.toFixed(0)}%</span>
             </div>
-            <Progress
-              value={progressValue}
-              className={`h-2 ${
-                status === 'good' ? 'bg-green-100' :
-                status === 'fair' ? 'bg-yellow-100' :
-                'bg-red-100'
-              }`}
-            />
+            <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden shadow-inner">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  status === 'good' ? 'bg-gradient-to-r from-emerald-500 to-green-600' :
+                  status === 'fair' ? 'bg-gradient-to-r from-amber-500 to-yellow-600' :
+                  'bg-gradient-to-r from-red-500 to-rose-600'
+                }`}
+                style={{ width: `${progressValue}%` }}
+              />
+            </div>
           </div>
         )}
 
         {/* Year Comparison */}
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="space-y-1">
-            <p className="text-muted-foreground text-xs">Current Year</p>
-            <p className="font-semibold">{currentValue?.toFixed(2)}</p>
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="space-y-1 p-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-lg border border-blue-200/50 dark:border-blue-800/30">
+            <p className="text-blue-600 dark:text-blue-400 text-xs font-medium">Current Year</p>
+            <p className="font-bold text-blue-700 dark:text-blue-300 text-base">
+              {typeof currentValue === 'number' ? currentValue.toFixed(2) : currentValue}
+            </p>
           </div>
           {previousValue !== null && previousValue !== undefined && (
-            <div className="space-y-1">
-              <p className="text-muted-foreground text-xs">Previous Year</p>
-              <p className="font-semibold">{previousValue.toFixed(2)}</p>
+            <div className="space-y-1 p-3 bg-gradient-to-br from-slate-50 to-gray-50 dark:from-slate-900/30 dark:to-gray-900/30 rounded-lg border border-slate-200/50 dark:border-slate-700/30">
+              <p className="text-slate-600 dark:text-slate-400 text-xs font-medium">Previous Year</p>
+              <p className="font-bold text-slate-700 dark:text-slate-300 text-base">
+                {typeof previousValue === 'number' ? previousValue.toFixed(2) : previousValue}
+              </p>
             </div>
           )}
         </div>
 
-        {/* Formula & Calculation */}
+        {/* Formula */}
         {formula && (
           <div className="border-t pt-2 space-y-1">
             <p className="text-xs font-medium text-muted-foreground">Formula</p>
@@ -182,18 +195,11 @@ function MetricCard({ name, data }: { name: string; data: any }) {
           </div>
         )}
 
-        {calculation && (
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Calculation</p>
-            <p className="text-xs font-mono bg-muted px-2 py-1 rounded">{calculation}</p>
-          </div>
-        )}
-
-        {/* Interpretation */}
-        {interpretation && (
+        {/* Commentary */}
+        {commentary && (
           <div className="border-t pt-2">
-            <p className="text-xs font-medium text-muted-foreground mb-1">💡 Interpretation</p>
-            <p className="text-xs leading-relaxed">{interpretation}</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">💡 Analysis</p>
+            <p className="text-xs leading-relaxed">{commentary}</p>
           </div>
         )}
       </CardContent>

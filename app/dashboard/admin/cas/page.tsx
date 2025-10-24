@@ -239,7 +239,24 @@ export default function CAManagementPage() {
 
   const openEditModal = (ca: any) => {
     setSelectedCA(ca);
-    setFormData({ name: ca.name, email: ca.email, password: '' });
+    setFormData({
+      name: ca.name || '',
+      email: ca.email || '',
+      password: '',
+      phone: ca.phone || '',
+      caLicenseNumber: ca.caLicenseNumber || '',
+      registrationYear: ca.registrationYear?.toString() || '',
+      firm: ca.firm || '',
+      specialization: ca.specialization || [],
+      yearsOfExperience: ca.yearsOfExperience?.toString() || '',
+      address: {
+        street: ca.address?.street || '',
+        city: ca.address?.city || '',
+        state: ca.address?.state || '',
+        zipCode: ca.address?.zipCode || '',
+        country: ca.address?.country || ''
+      }
+    });
     setEditModalOpen(true);
   };
 
@@ -584,28 +601,137 @@ export default function CAManagementPage() {
 
       {/* Edit CA Modal */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit CA</DialogTitle>
             <DialogDescription>Update CA information</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">Name</label>
-              <Input
-                placeholder="CA Name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
+          <div className="space-y-6">
+            {/* Personal Information */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold">Personal Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Full Name</label>
+                  <Input
+                    placeholder="John Doe"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Phone Number</label>
+                  <Input
+                    placeholder="+91 98765 43210"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  />
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="text-sm font-medium mb-2 block">Email</label>
-              <Input
-                type="email"
-                placeholder="ca@example.com"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
+
+            {/* Professional Details */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold">Professional Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">CA License Number</label>
+                  <Input
+                    placeholder="e.g., 123456"
+                    value={formData.caLicenseNumber}
+                    onChange={(e) => setFormData({ ...formData, caLicenseNumber: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Registration Year</label>
+                  <Input
+                    type="number"
+                    placeholder="e.g., 2015"
+                    value={formData.registrationYear}
+                    onChange={(e) => setFormData({ ...formData, registrationYear: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Firm Name</label>
+                  <Input
+                    placeholder="e.g., ABC & Associates"
+                    value={formData.firm}
+                    onChange={(e) => setFormData({ ...formData, firm: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Years of Experience</label>
+                  <Input
+                    type="number"
+                    placeholder="e.g., 10"
+                    value={formData.yearsOfExperience}
+                    onChange={(e) => setFormData({ ...formData, yearsOfExperience: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Address */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold">Address</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Street Address</label>
+                  <Input
+                    placeholder="123 Main Street"
+                    value={formData.address.street}
+                    onChange={(e) => setFormData({ ...formData, address: { ...formData.address, street: e.target.value } })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">City</label>
+                    <Input
+                      placeholder="Mumbai"
+                      value={formData.address.city}
+                      onChange={(e) => setFormData({ ...formData, address: { ...formData.address, city: e.target.value } })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">State</label>
+                    <Input
+                      placeholder="Maharashtra"
+                      value={formData.address.state}
+                      onChange={(e) => setFormData({ ...formData, address: { ...formData.address, state: e.target.value } })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">ZIP Code</label>
+                    <Input
+                      placeholder="400001"
+                      value={formData.address.zipCode}
+                      onChange={(e) => setFormData({ ...formData, address: { ...formData.address, zipCode: e.target.value } })}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Country</label>
+                    <Input
+                      placeholder="India"
+                      value={formData.address.country}
+                      onChange={(e) => setFormData({ ...formData, address: { ...formData.address, country: e.target.value } })}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Account Credentials */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold">Account Email</h3>
+              <div>
+                <label className="text-sm font-medium mb-2 block">Email</label>
+                <Input
+                  type="email"
+                  placeholder="ca@example.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
