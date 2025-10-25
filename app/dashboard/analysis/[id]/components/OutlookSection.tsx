@@ -17,9 +17,18 @@ interface OutlookSectionProps {
   trendAnalysis: any;
   riskAssessment: any;
   industryBench: any;
+  graphicalData?: any;
+  futureOutlook?: any;
 }
 
-export function OutlookSection({ healthAnalysis, trendAnalysis, riskAssessment, industryBench }: OutlookSectionProps) {
+export function OutlookSection({
+  healthAnalysis,
+  trendAnalysis,
+  riskAssessment,
+  industryBench,
+  graphicalData,
+  futureOutlook
+}: OutlookSectionProps) {
   return (
     <div className="space-y-6">
       {/* Trend Analysis */}
@@ -189,6 +198,147 @@ export function OutlookSection({ healthAnalysis, trendAnalysis, riskAssessment, 
           )}
         </CardContent>
       </Card>
+
+      {/* Future Outlook - 3 Year Predictions */}
+      {futureOutlook && futureOutlook.predictions_next_3_years && (
+        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-background">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              3-Year Financial Projections
+            </CardTitle>
+            <CardDescription>Predictive outlook based on historical trends and current performance</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Growth Trajectory */}
+            {futureOutlook.growth_trajectory && (
+              <Alert>
+                <BarChart3 className="h-4 w-4" />
+                <AlertDescription className="ml-2">
+                  <strong>Growth Trajectory:</strong> {futureOutlook.growth_trajectory}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Year Predictions */}
+            <div className="grid gap-4 md:grid-cols-3">
+              {['year_1', 'year_2', 'year_3'].map((yearKey, index) => {
+                const yearData = futureOutlook.predictions_next_3_years[yearKey];
+                if (!yearData) return null;
+
+                return (
+                  <Card key={yearKey} className="border-2">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">Year {index + 1}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {/* Revenue Projection */}
+                      {yearData.revenue && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">Revenue Projection</p>
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Expected:</span>
+                              <span className="font-semibold">₹{(yearData.revenue.expected / 100000).toFixed(2)}L</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>Range:</span>
+                              <span>₹{(yearData.revenue.min / 100000).toFixed(2)}L - ₹{(yearData.revenue.max / 100000).toFixed(2)}L</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Net Profit Projection */}
+                      {yearData.netProfit && (
+                        <div className="space-y-1 border-t pt-2">
+                          <p className="text-xs font-medium text-muted-foreground">Net Profit Projection</p>
+                          <div className="space-y-0.5">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Expected:</span>
+                              <span className="font-semibold text-green-600">₹{(yearData.netProfit.expected / 100000).toFixed(2)}L</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>Range:</span>
+                              <span>₹{(yearData.netProfit.min / 100000).toFixed(2)}L - ₹{(yearData.netProfit.max / 100000).toFixed(2)}L</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Key Metrics */}
+                      {yearData.keyMetrics && (
+                        <div className="space-y-1 border-t pt-2">
+                          <p className="text-xs font-medium text-muted-foreground">Key Metrics</p>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            {yearData.keyMetrics.currentRatio && (
+                              <div>
+                                <p className="text-muted-foreground">Current Ratio</p>
+                                <p className="font-semibold">{yearData.keyMetrics.currentRatio}</p>
+                              </div>
+                            )}
+                            {yearData.keyMetrics.netMargin && (
+                              <div>
+                                <p className="text-muted-foreground">Net Margin</p>
+                                <p className="font-semibold">{yearData.keyMetrics.netMargin}</p>
+                              </div>
+                            )}
+                            {yearData.keyMetrics.debtToEquity && (
+                              <div className="col-span-2">
+                                <p className="text-muted-foreground">Debt-to-Equity</p>
+                                <p className="font-semibold">{yearData.keyMetrics.debtToEquity}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Opportunities and Challenges */}
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Major Opportunities */}
+              {futureOutlook.major_opportunities && futureOutlook.major_opportunities.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm flex items-center gap-2 text-green-600">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Major Opportunities
+                  </h4>
+                  <ul className="space-y-2">
+                    {futureOutlook.major_opportunities.map((opp: string, index: number) => (
+                      <li key={index} className="flex items-start gap-2 text-sm">
+                        <span className="text-green-600 font-semibold flex-shrink-0">•</span>
+                        <span>{opp}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Potential Challenges */}
+              {futureOutlook.potential_challenges && futureOutlook.potential_challenges.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm flex items-center gap-2 text-amber-600">
+                    <AlertTriangle className="h-4 w-4" />
+                    Potential Challenges
+                  </h4>
+                  <ul className="space-y-2">
+                    {futureOutlook.potential_challenges.map((challenge: string, index: number) => (
+                      <li key={index} className="flex items-start gap-2 text-sm">
+                        <span className="text-amber-600 font-semibold flex-shrink-0">•</span>
+                        <span>{challenge}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recommendations */}
       <div className="grid gap-6 md:grid-cols-2">

@@ -139,20 +139,29 @@ export const authApi = {
 
 // Companies API
 export const companiesApi = {
-  getAll: (params?: { page?: number; limit?: number; search?: string }) => {
+  getAll: (params?: { page?: number; limit?: number; search?: string; status?: string; industry?: string }) => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     if (params?.search) queryParams.append('search', params.search);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.industry) queryParams.append('industry', params.industry);
 
     const query = queryParams.toString();
     return apiClient.get<{
       success: boolean;
       data: {
         companies: any[];
-        totalPages: number;
-        currentPage: number;
-        total: number;
+        pagination?: {
+          totalPages: number;
+          currentPage: number;
+          total: number;
+          limit: number;
+        };
+        // Legacy support
+        totalPages?: number;
+        currentPage?: number;
+        total?: number;
       }
     }>(
       `/companies${query ? `?${query}` : ''}`

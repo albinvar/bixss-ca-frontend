@@ -20,12 +20,14 @@ import {
   LineChart,
   Download,
 } from 'lucide-react';
-import { financialAnalysisApi } from '@/lib/financial-analysis-api';
 import { analysisApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { MetricsSection } from './components/MetricsSection';
 import { OutlookSection } from './components/OutlookSection';
-import { captureAnalysisCharts, downloadBlob } from '@/lib/chart-export';
+import { DynamicFinancialTable } from './components/DynamicFinancialTable';
+import { SmartMetricsSection } from './components/SmartMetricsSection';
+import { FinancialCharts } from './components/FinancialCharts';
+import { FutureProjectionCharts } from './components/FutureProjectionCharts';
 
 export default function AnalysisDetailPage() {
   const params = useParams();
@@ -36,6 +38,8 @@ export default function AnalysisDetailPage() {
   const [analysis, setAnalysis] = useState<any>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [isExporting, setIsExporting] = useState(false);
+  const [availableYears, setAvailableYears] = useState<string[]>([]);
+  const [selectedYear, setSelectedYear] = useState<string>('');
 
   useEffect(() => {
     if (analysisId) {
@@ -50,6 +54,14 @@ export default function AnalysisDetailPage() {
       const response = await analysisApi.getById(analysisId);
       if (response.success && response.data) {
         setAnalysis(response.data);
+
+        // Set available years and default to most recent
+        const years = response.data.available_years || [];
+        if (years.length > 0) {
+          const sortedYears = [...years].sort((a, b) => parseInt(b) - parseInt(a));
+          setAvailableYears(sortedYears);
+          setSelectedYear(sortedYears[0]); // Default to most recent year
+        }
       } else {
         throw new Error('Invalid response format');
       }
@@ -66,22 +78,20 @@ export default function AnalysisDetailPage() {
 
     setIsExporting(true);
     try {
-      toast.info('Capturing charts...');
-
-      // Find the main content container
-      const contentElement = document.querySelector('[data-analysis-content]') as HTMLElement;
-
-      // Capture all charts
-      const charts = contentElement ? await captureAnalysisCharts(contentElement) : {};
-
       toast.info('Generating PDF...');
 
-      // Call backend to generate PDF
-      const pdfBlob = await analysisApi.exportPDF(analysisId, charts);
+      // Call backend to generate PDF (simple version without chart capture)
+      const pdfBlob = await analysisApi.exportPDF(analysisId, {});
 
       // Download the PDF
-      const filename = `Analysis_${analysis.company_information?.name || 'Report'}_${analysisId}.pdf`;
-      downloadBlob(pdfBlob, filename);
+      const url = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Analysis_${analysis.company_information?.company_name || 'Report'}_${analysisId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
 
       toast.success('PDF exported successfully!');
     } catch (error: any) {
@@ -119,13 +129,36 @@ export default function AnalysisDetailPage() {
 
   const companyInfo = analysis.company_information || {};
   const healthAnalysis = analysis.health_analysis || {};
+
+  // NEW: Dual extraction data
+  const extractedFields = analysis.extracted_fields || {};
+  const standardizedFields = analysis.standardized_fields || {};
+  const calculatedMetrics = analysis.calculated_metrics || {};
+
+  // Legacy data (backward compatibility)
   const balanceSheet = analysis.balance_sheet_data || {};
   const incomeStatement = analysis.income_statement_data || {};
   const cashFlow = analysis.cash_flow_data || {};
   const metrics = analysis.financial_metrics || {};
+
   const trendAnalysis = analysis.trend_analysis || {};
   const riskAssessment = analysis.risk_assessment || {};
   const industryBench = analysis.industry_benchmarking || {};
+  const graphicalData = analysis.graphical_data || {};
+  const futureOutlook = analysis.future_outlook || {};
+
+  // Check if we have new dual extraction data
+  const hasExtractedFields = extractedFields && Object.keys(extractedFields).length > 0;
+  const hasCalculatedMetrics = calculatedMetrics && Object.keys(calculatedMetrics).length > 0;
+
+  // Helper to get year index
+  const getYearIndex = (year: string) => {
+    const sortedYears = [...availableYears].sort((a, b) => parseInt(b) - parseInt(a));
+    return sortedYears.indexOf(year);
+  };
+
+  const selectedYearIndex = getYearIndex(selectedYear);
+  const previousYear = availableYears[selectedYearIndex + 1] || null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -189,7 +222,7 @@ export default function AnalysisDetailPage() {
             </TabsTrigger>
             <TabsTrigger value="metrics" className="gap-2">
               <BarChart3 className="h-4 w-4" />
-              Calculated Metrics
+              Ratios & Metrics
             </TabsTrigger>
             <TabsTrigger value="outlook" className="gap-2">
               <LineChart className="h-4 w-4" />
@@ -202,27 +235,63 @@ export default function AnalysisDetailPage() {
             <OverviewSection
               companyInfo={companyInfo}
               healthAnalysis={healthAnalysis}
-              balanceSheet={balanceSheet}
-              incomeStatement={incomeStatement}
+              balanceSheet={hasExtractedFields ? extractedFields.balance_sheet : balanceSheet}
+              incomeStatement={hasExtractedFields ? extractedFields.income_statement : incomeStatement}
               cashFlow={cashFlow}
+              extractedFields={extractedFields}
+              standardizedFields={standardizedFields}
+              selectedYear={selectedYear}
+              previousYear={previousYear}
+              availableYears={availableYears}
+              hasExtractedFields={hasExtractedFields}
             />
+
+            {/* Financial Charts - Visual Analytics */}
+            {graphicalData && Object.keys(graphicalData).length > 0 && (
+              <div>
+                <h3 className="text-xl font-semibold mb-4">Visual Analytics</h3>
+                <FinancialCharts graphicalData={graphicalData} currency={companyInfo.currency || '₹'} />
+              </div>
+            )}
           </TabsContent>
 
-          {/* METRICS TAB */}
+          {/* METRICS TAB - Smart Ratios with Availability Checks */}
           <TabsContent value="metrics" className="space-y-6">
-            <div data-chart-name="financial_metrics">
-              <MetricsSection metrics={metrics} />
-            </div>
+            {hasCalculatedMetrics ? (
+              <SmartMetricsSection
+                calculatedMetrics={calculatedMetrics}
+                availableYears={availableYears}
+              />
+            ) : (
+              <div data-chart-name="financial_metrics">
+                <MetricsSection
+                  metrics={metrics}
+                  selectedYear={selectedYear}
+                  previousYear={previousYear}
+                />
+              </div>
+            )}
           </TabsContent>
 
           {/* OUTLOOK TAB */}
           <TabsContent value="outlook" className="space-y-6">
+            {/* Future Projection Charts */}
+            {futureOutlook && Object.keys(futureOutlook).length > 0 && (
+              <FutureProjectionCharts
+                futureOutlook={futureOutlook}
+                currency={companyInfo.currency || '₹'}
+              />
+            )}
+
+            {/* Additional Outlook Analysis */}
             <div data-chart-name="outlook_analysis">
               <OutlookSection
                 healthAnalysis={healthAnalysis}
                 trendAnalysis={trendAnalysis}
                 riskAssessment={riskAssessment}
                 industryBench={industryBench}
+                graphicalData={graphicalData}
+                futureOutlook={futureOutlook}
               />
             </div>
           </TabsContent>
@@ -233,7 +302,19 @@ export default function AnalysisDetailPage() {
 }
 
 // OVERVIEW SECTION COMPONENT
-function OverviewSection({ companyInfo, healthAnalysis, balanceSheet, incomeStatement, cashFlow }: any) {
+function OverviewSection({
+  companyInfo,
+  healthAnalysis,
+  balanceSheet,
+  incomeStatement,
+  cashFlow,
+  extractedFields,
+  standardizedFields,
+  selectedYear,
+  previousYear,
+  availableYears,
+  hasExtractedFields
+}: any) {
   return (
     <div className="space-y-6">
       {/* Key Highlights */}
@@ -280,40 +361,83 @@ function OverviewSection({ companyInfo, healthAnalysis, balanceSheet, incomeStat
       </div>
 
       {/* Financial Statements */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Financial Statements</CardTitle>
-          <CardDescription>Year-over-year comparison</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="balance-sheet" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
-              <TabsTrigger value="income-statement">Income Statement</TabsTrigger>
-              <TabsTrigger value="cash-flow">Cash Flow</TabsTrigger>
-            </TabsList>
+      {hasExtractedFields ? (
+        /* NEW: Use DynamicFinancialTable for extracted fields */
+        <div className="space-y-6">
+          {balanceSheet && (
+            <DynamicFinancialTable
+              title="Balance Sheet"
+              description="All line items extracted from your financial document"
+              extractedFields={balanceSheet}
+              standardizedFields={standardizedFields}
+              availableYears={availableYears}
+              section="balance_sheet"
+            />
+          )}
 
-            <TabsContent value="balance-sheet" className="space-y-4">
-              <BalanceSheetTable data={balanceSheet} />
-            </TabsContent>
+          {incomeStatement && (
+            <DynamicFinancialTable
+              title="Income Statement"
+              description="All line items extracted from your financial document"
+              extractedFields={incomeStatement}
+              standardizedFields={standardizedFields}
+              availableYears={availableYears}
+              section="income_statement"
+            />
+          )}
+        </div>
+      ) : (
+        /* LEGACY: Use old table components for backward compatibility */
+        <Card>
+          <CardHeader>
+            <CardTitle>Financial Statements</CardTitle>
+            <CardDescription>Year-over-year comparison</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="balance-sheet" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="balance-sheet">Balance Sheet</TabsTrigger>
+                <TabsTrigger value="income-statement">Income Statement</TabsTrigger>
+                <TabsTrigger value="cash-flow">Cash Flow</TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="income-statement" className="space-y-4">
-              <IncomeStatementTable data={incomeStatement} />
-            </TabsContent>
+              <TabsContent value="balance-sheet" className="space-y-4">
+                <BalanceSheetTable
+                  data={balanceSheet}
+                  selectedYear={selectedYear}
+                  previousYear={previousYear}
+                  availableYears={availableYears}
+                />
+              </TabsContent>
 
-            <TabsContent value="cash-flow" className="space-y-4">
-              <CashFlowTable data={cashFlow} />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+              <TabsContent value="income-statement" className="space-y-4">
+                <IncomeStatementTable
+                  data={incomeStatement}
+                  selectedYear={selectedYear}
+                  previousYear={previousYear}
+                  availableYears={availableYears}
+                />
+              </TabsContent>
+
+              <TabsContent value="cash-flow" className="space-y-4">
+                <CashFlowTable
+                  data={cashFlow}
+                  selectedYear={selectedYear}
+                  previousYear={previousYear}
+                  availableYears={availableYears}
+                />
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
 
 
 // Financial Statement Tables
-function BalanceSheetTable({ data }: any) {
+function BalanceSheetTable({ data, selectedYear, previousYear, availableYears }: any) {
   const formatCurrency = (value: number | null) => {
     if (value === null || value === undefined) return 'N/A';
     return `₹${(value / 100000).toFixed(2)}L`;
@@ -323,6 +447,13 @@ function BalanceSheetTable({ data }: any) {
     if (!current || !previous) return null;
     const change = ((current - previous) / previous) * 100;
     return change;
+  };
+
+  // Get value from year-keyed format: {"2024": 1000, "2023": 900, ...}
+  const getValue = (obj: any, yearType: 'current' | 'previous') => {
+    if (!obj) return null;
+    const year = yearType === 'current' ? selectedYear : previousYear;
+    return year && typeof obj === 'object' ? obj[year] ?? null : null;
   };
 
   return (
@@ -343,13 +474,13 @@ function BalanceSheetTable({ data }: any) {
             <tbody className="divide-y">
               <tr>
                 <td className="py-2 pl-4 text-muted-foreground">Cash & Bank</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.current_assets?.cash_and_bank?.current_year)}</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.current_assets?.cash_and_bank?.previous_year)}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.current_assets?.cash_and_bank, 'current'))}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.current_assets?.cash_and_bank, 'previous'))}</td>
                 <td className="py-2 text-right">
                   {(() => {
                     const change = calculateChange(
-                      data.assets?.current_assets?.cash_and_bank?.current_year,
-                      data.assets?.current_assets?.cash_and_bank?.previous_year
+                      getValue(data.assets?.current_assets?.cash_and_bank, 'current'),
+                      getValue(data.assets?.current_assets?.cash_and_bank, 'previous')
                     );
                     if (change === null) return 'N/A';
                     return (
@@ -362,13 +493,13 @@ function BalanceSheetTable({ data }: any) {
               </tr>
               <tr>
                 <td className="py-2 pl-4 text-muted-foreground">Accounts Receivable</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.current_assets?.accounts_receivable?.current_year)}</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.current_assets?.accounts_receivable?.previous_year)}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.current_assets?.accounts_receivable, 'current'))}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.current_assets?.accounts_receivable, 'previous'))}</td>
                 <td className="py-2 text-right">
                   {(() => {
                     const change = calculateChange(
-                      data.assets?.current_assets?.accounts_receivable?.current_year,
-                      data.assets?.current_assets?.accounts_receivable?.previous_year
+                      getValue(data.assets?.current_assets?.accounts_receivable, 'current'),
+                      getValue(data.assets?.current_assets?.accounts_receivable, 'previous')
                     );
                     if (change === null) return 'N/A';
                     return (
@@ -381,13 +512,13 @@ function BalanceSheetTable({ data }: any) {
               </tr>
               <tr>
                 <td className="py-2 pl-4 text-muted-foreground">Inventory</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.current_assets?.inventory?.current_year)}</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.current_assets?.inventory?.previous_year)}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.current_assets?.inventory, 'current'))}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.current_assets?.inventory, 'previous'))}</td>
                 <td className="py-2 text-right">
                   {(() => {
                     const change = calculateChange(
-                      data.assets?.current_assets?.inventory?.current_year,
-                      data.assets?.current_assets?.inventory?.previous_year
+                      getValue(data.assets?.current_assets?.inventory, 'current'),
+                      getValue(data.assets?.current_assets?.inventory, 'previous')
                     );
                     if (change === null) return 'N/A';
                     return (
@@ -400,13 +531,13 @@ function BalanceSheetTable({ data }: any) {
               </tr>
               <tr className="font-semibold">
                 <td className="py-2">Total Current Assets</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.current_assets?.total_current_assets?.current_year)}</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.current_assets?.total_current_assets?.previous_year)}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.current_assets?.total_current_assets, 'current'))}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.current_assets?.total_current_assets, 'previous'))}</td>
                 <td className="py-2 text-right">
                   {(() => {
                     const change = calculateChange(
-                      data.assets?.current_assets?.total_current_assets?.current_year,
-                      data.assets?.current_assets?.total_current_assets?.previous_year
+                      getValue(data.assets?.current_assets?.total_current_assets, 'current'),
+                      getValue(data.assets?.current_assets?.total_current_assets, 'previous')
                     );
                     if (change === null) return 'N/A';
                     return (
@@ -419,13 +550,13 @@ function BalanceSheetTable({ data }: any) {
               </tr>
               <tr>
                 <td className="py-2 pl-4 text-muted-foreground">Property, Plant & Equipment</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.non_current_assets?.property_plant_equipment?.current_year)}</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.non_current_assets?.property_plant_equipment?.previous_year)}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.non_current_assets?.property_plant_equipment, 'current'))}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.non_current_assets?.property_plant_equipment, 'previous'))}</td>
                 <td className="py-2 text-right">
                   {(() => {
                     const change = calculateChange(
-                      data.assets?.non_current_assets?.property_plant_equipment?.current_year,
-                      data.assets?.non_current_assets?.property_plant_equipment?.previous_year
+                      getValue(data.assets?.non_current_assets?.property_plant_equipment, 'current'),
+                      getValue(data.assets?.non_current_assets?.property_plant_equipment, 'previous')
                     );
                     if (change === null) return 'N/A';
                     return (
@@ -438,13 +569,13 @@ function BalanceSheetTable({ data }: any) {
               </tr>
               <tr className="font-semibold border-t-2">
                 <td className="py-2">TOTAL ASSETS</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.total_assets?.current_year)}</td>
-                <td className="py-2 text-right">{formatCurrency(data.assets?.total_assets?.previous_year)}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.total_assets, 'current'))}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.assets?.total_assets, 'previous'))}</td>
                 <td className="py-2 text-right">
                   {(() => {
                     const change = calculateChange(
-                      data.assets?.total_assets?.current_year,
-                      data.assets?.total_assets?.previous_year
+                      getValue(data.assets?.total_assets, 'current'),
+                      getValue(data.assets?.total_assets, 'previous')
                     );
                     if (change === null) return 'N/A';
                     return (
@@ -476,13 +607,13 @@ function BalanceSheetTable({ data }: any) {
             <tbody className="divide-y">
               <tr>
                 <td className="py-2 pl-4 text-muted-foreground">Accounts Payable</td>
-                <td className="py-2 text-right">{formatCurrency(data.liabilities?.current_liabilities?.accounts_payable?.current_year)}</td>
-                <td className="py-2 text-right">{formatCurrency(data.liabilities?.current_liabilities?.accounts_payable?.previous_year)}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.liabilities?.current_liabilities?.accounts_payable, 'current'))}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.liabilities?.current_liabilities?.accounts_payable, 'previous'))}</td>
                 <td className="py-2 text-right">
                   {(() => {
                     const change = calculateChange(
-                      data.liabilities?.current_liabilities?.accounts_payable?.current_year,
-                      data.liabilities?.current_liabilities?.accounts_payable?.previous_year
+                      getValue(data.liabilities?.current_liabilities?.accounts_payable, 'current'),
+                      getValue(data.liabilities?.current_liabilities?.accounts_payable, 'previous')
                     );
                     if (change === null) return 'N/A';
                     return (
@@ -495,13 +626,13 @@ function BalanceSheetTable({ data }: any) {
               </tr>
               <tr>
                 <td className="py-2 pl-4 text-muted-foreground">Short-term Debt</td>
-                <td className="py-2 text-right">{formatCurrency(data.liabilities?.current_liabilities?.short_term_debt?.current_year)}</td>
-                <td className="py-2 text-right">{formatCurrency(data.liabilities?.current_liabilities?.short_term_debt?.previous_year)}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.liabilities?.current_liabilities?.short_term_debt, 'current'))}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.liabilities?.current_liabilities?.short_term_debt, 'previous'))}</td>
                 <td className="py-2 text-right">
                   {(() => {
                     const change = calculateChange(
-                      data.liabilities?.current_liabilities?.short_term_debt?.current_year,
-                      data.liabilities?.current_liabilities?.short_term_debt?.previous_year
+                      getValue(data.liabilities?.current_liabilities?.short_term_debt, 'current'),
+                      getValue(data.liabilities?.current_liabilities?.short_term_debt, 'previous')
                     );
                     if (change === null) return 'N/A';
                     return (
@@ -514,13 +645,13 @@ function BalanceSheetTable({ data }: any) {
               </tr>
               <tr className="font-semibold">
                 <td className="py-2">Total Current Liabilities</td>
-                <td className="py-2 text-right">{formatCurrency(data.liabilities?.current_liabilities?.total_current_liabilities?.current_year)}</td>
-                <td className="py-2 text-right">{formatCurrency(data.liabilities?.current_liabilities?.total_current_liabilities?.previous_year)}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.liabilities?.current_liabilities?.total_current_liabilities, 'current'))}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.liabilities?.current_liabilities?.total_current_liabilities, 'previous'))}</td>
                 <td className="py-2 text-right">
                   {(() => {
                     const change = calculateChange(
-                      data.liabilities?.current_liabilities?.total_current_liabilities?.current_year,
-                      data.liabilities?.current_liabilities?.total_current_liabilities?.previous_year
+                      getValue(data.liabilities?.current_liabilities?.total_current_liabilities, 'current'),
+                      getValue(data.liabilities?.current_liabilities?.total_current_liabilities, 'previous')
                     );
                     if (change === null) return 'N/A';
                     return (
@@ -533,13 +664,13 @@ function BalanceSheetTable({ data }: any) {
               </tr>
               <tr className="font-semibold">
                 <td className="py-2">Total Equity</td>
-                <td className="py-2 text-right">{formatCurrency(data.equity?.total_equity?.current_year)}</td>
-                <td className="py-2 text-right">{formatCurrency(data.equity?.total_equity?.previous_year)}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.equity?.total_equity, 'current'))}</td>
+                <td className="py-2 text-right">{formatCurrency(getValue(data.equity?.total_equity, 'previous'))}</td>
                 <td className="py-2 text-right">
                   {(() => {
                     const change = calculateChange(
-                      data.equity?.total_equity?.current_year,
-                      data.equity?.total_equity?.previous_year
+                      getValue(data.equity?.total_equity, 'current'),
+                      getValue(data.equity?.total_equity, 'previous')
                     );
                     if (change === null) return 'N/A';
                     return (
@@ -558,7 +689,7 @@ function BalanceSheetTable({ data }: any) {
   );
 }
 
-function IncomeStatementTable({ data }: any) {
+function IncomeStatementTable({ data, selectedYear, previousYear, availableYears }: any) {
   const formatCurrency = (value: number | null) => {
     if (value === null || value === undefined) return 'N/A';
     return `₹${(value / 100000).toFixed(2)}L`;
@@ -568,6 +699,13 @@ function IncomeStatementTable({ data }: any) {
     if (!current || !previous) return null;
     const change = ((current - previous) / previous) * 100;
     return change;
+  };
+
+  // Get value from year-keyed format: {"2024": 1000, "2023": 900, ...}
+  const getValue = (obj: any, yearType: 'current' | 'previous') => {
+    if (!obj) return null;
+    const year = yearType === 'current' ? selectedYear : previousYear;
+    return year && typeof obj === 'object' ? obj[year] ?? null : null;
   };
 
   return (
@@ -584,13 +722,13 @@ function IncomeStatementTable({ data }: any) {
         <tbody className="divide-y">
           <tr className="font-semibold">
             <td className="py-2">Total Revenue</td>
-            <td className="py-2 text-right">{formatCurrency(data.revenue?.total_revenue?.current_year)}</td>
-            <td className="py-2 text-right">{formatCurrency(data.revenue?.total_revenue?.previous_year)}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.revenue?.total_revenue, 'current'))}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.revenue?.total_revenue, 'previous'))}</td>
             <td className="py-2 text-right">
               {(() => {
                 const change = calculateChange(
-                  data.revenue?.total_revenue?.current_year,
-                  data.revenue?.total_revenue?.previous_year
+                  getValue(data.revenue?.total_revenue, 'current'),
+                  getValue(data.revenue?.total_revenue, 'previous')
                 );
                 if (change === null) return 'N/A';
                 return (
@@ -603,13 +741,13 @@ function IncomeStatementTable({ data }: any) {
           </tr>
           <tr>
             <td className="py-2 pl-4 text-muted-foreground">Cost of Goods Sold</td>
-            <td className="py-2 text-right">{formatCurrency(data.expenses?.cost_of_goods_sold?.current_year)}</td>
-            <td className="py-2 text-right">{formatCurrency(data.expenses?.cost_of_goods_sold?.previous_year)}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.expenses?.cost_of_goods_sold, 'current'))}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.expenses?.cost_of_goods_sold, 'previous'))}</td>
             <td className="py-2 text-right">
               {(() => {
                 const change = calculateChange(
-                  data.expenses?.cost_of_goods_sold?.current_year,
-                  data.expenses?.cost_of_goods_sold?.previous_year
+                  getValue(data.expenses?.cost_of_goods_sold, 'current'),
+                  getValue(data.expenses?.cost_of_goods_sold, 'previous')
                 );
                 if (change === null) return 'N/A';
                 return (
@@ -622,13 +760,13 @@ function IncomeStatementTable({ data }: any) {
           </tr>
           <tr className="font-semibold">
             <td className="py-2">Gross Profit</td>
-            <td className="py-2 text-right">{formatCurrency(data.expenses?.gross_profit?.current_year)}</td>
-            <td className="py-2 text-right">{formatCurrency(data.expenses?.gross_profit?.previous_year)}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.expenses?.gross_profit, 'current'))}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.expenses?.gross_profit, 'previous'))}</td>
             <td className="py-2 text-right">
               {(() => {
                 const change = calculateChange(
-                  data.expenses?.gross_profit?.current_year,
-                  data.expenses?.gross_profit?.previous_year
+                  getValue(data.expenses?.gross_profit, 'current'),
+                  getValue(data.expenses?.gross_profit, 'previous')
                 );
                 if (change === null) return 'N/A';
                 return (
@@ -641,13 +779,13 @@ function IncomeStatementTable({ data }: any) {
           </tr>
           <tr>
             <td className="py-2 pl-4 text-muted-foreground">Operating Expenses</td>
-            <td className="py-2 text-right">{formatCurrency(data.expenses?.operating_expenses?.total_operating_expenses?.current_year)}</td>
-            <td className="py-2 text-right">{formatCurrency(data.expenses?.operating_expenses?.total_operating_expenses?.previous_year)}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.expenses?.operating_expenses?.total_operating_expenses, 'current'))}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.expenses?.operating_expenses?.total_operating_expenses, 'previous'))}</td>
             <td className="py-2 text-right">
               {(() => {
                 const change = calculateChange(
-                  data.expenses?.operating_expenses?.total_operating_expenses?.current_year,
-                  data.expenses?.operating_expenses?.total_operating_expenses?.previous_year
+                  getValue(data.expenses?.operating_expenses?.total_operating_expenses, 'current'),
+                  getValue(data.expenses?.operating_expenses?.total_operating_expenses, 'previous')
                 );
                 if (change === null) return 'N/A';
                 return (
@@ -660,13 +798,13 @@ function IncomeStatementTable({ data }: any) {
           </tr>
           <tr className="font-semibold">
             <td className="py-2">Operating Income (EBIT)</td>
-            <td className="py-2 text-right">{formatCurrency(data.profitability?.operating_income_ebit?.current_year)}</td>
-            <td className="py-2 text-right">{formatCurrency(data.profitability?.operating_income_ebit?.previous_year)}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.profitability?.operating_income_ebit, 'current'))}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.profitability?.operating_income_ebit, 'previous'))}</td>
             <td className="py-2 text-right">
               {(() => {
                 const change = calculateChange(
-                  data.profitability?.operating_income_ebit?.current_year,
-                  data.profitability?.operating_income_ebit?.previous_year
+                  getValue(data.profitability?.operating_income_ebit, 'current'),
+                  getValue(data.profitability?.operating_income_ebit, 'previous')
                 );
                 if (change === null) return 'N/A';
                 return (
@@ -679,13 +817,13 @@ function IncomeStatementTable({ data }: any) {
           </tr>
           <tr className="font-semibold border-t-2">
             <td className="py-2">Net Income</td>
-            <td className="py-2 text-right">{formatCurrency(data.profitability?.net_income?.current_year)}</td>
-            <td className="py-2 text-right">{formatCurrency(data.profitability?.net_income?.previous_year)}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.profitability?.net_income, 'current'))}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.profitability?.net_income, 'previous'))}</td>
             <td className="py-2 text-right">
               {(() => {
                 const change = calculateChange(
-                  data.profitability?.net_income?.current_year,
-                  data.profitability?.net_income?.previous_year
+                  getValue(data.profitability?.net_income, 'current'),
+                  getValue(data.profitability?.net_income, 'previous')
                 );
                 if (change === null) return 'N/A';
                 return (
@@ -702,7 +840,7 @@ function IncomeStatementTable({ data }: any) {
   );
 }
 
-function CashFlowTable({ data }: any) {
+function CashFlowTable({ data, selectedYear, previousYear, availableYears }: any) {
   const formatCurrency = (value: number | null) => {
     if (value === null || value === undefined) return 'N/A';
     return `₹${(value / 100000).toFixed(2)}L`;
@@ -712,6 +850,13 @@ function CashFlowTable({ data }: any) {
     if (!current || !previous) return null;
     const change = ((current - previous) / previous) * 100;
     return change;
+  };
+
+  // Get value from year-keyed format: {"2024": 1000, "2023": 900, ...}
+  const getValue = (obj: any, yearType: 'current' | 'previous') => {
+    if (!obj) return null;
+    const year = yearType === 'current' ? selectedYear : previousYear;
+    return year && typeof obj === 'object' ? obj[year] ?? null : null;
   };
 
   return (
@@ -728,13 +873,13 @@ function CashFlowTable({ data }: any) {
         <tbody className="divide-y">
           <tr className="font-semibold">
             <td className="py-2">Operating Activities</td>
-            <td className="py-2 text-right">{formatCurrency(data.operating_activities?.net_cash_from_operations?.current_year)}</td>
-            <td className="py-2 text-right">{formatCurrency(data.operating_activities?.net_cash_from_operations?.previous_year)}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.operating_activities?.net_cash_from_operations, 'current'))}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.operating_activities?.net_cash_from_operations, 'previous'))}</td>
             <td className="py-2 text-right">
               {(() => {
                 const change = calculateChange(
-                  data.operating_activities?.net_cash_from_operations?.current_year,
-                  data.operating_activities?.net_cash_from_operations?.previous_year
+                  getValue(data.operating_activities?.net_cash_from_operations, 'current'),
+                  getValue(data.operating_activities?.net_cash_from_operations, 'previous')
                 );
                 if (change === null) return 'N/A';
                 return (
@@ -747,13 +892,13 @@ function CashFlowTable({ data }: any) {
           </tr>
           <tr className="font-semibold">
             <td className="py-2">Investing Activities</td>
-            <td className="py-2 text-right">{formatCurrency(data.investing_activities?.net_cash_from_investing?.current_year)}</td>
-            <td className="py-2 text-right">{formatCurrency(data.investing_activities?.net_cash_from_investing?.previous_year)}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.investing_activities?.net_cash_from_investing, 'current'))}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.investing_activities?.net_cash_from_investing, 'previous'))}</td>
             <td className="py-2 text-right">
               {(() => {
                 const change = calculateChange(
-                  data.investing_activities?.net_cash_from_investing?.current_year,
-                  data.investing_activities?.net_cash_from_investing?.previous_year
+                  getValue(data.investing_activities?.net_cash_from_investing, 'current'),
+                  getValue(data.investing_activities?.net_cash_from_investing, 'previous')
                 );
                 if (change === null) return 'N/A';
                 return (
@@ -766,13 +911,13 @@ function CashFlowTable({ data }: any) {
           </tr>
           <tr className="font-semibold">
             <td className="py-2">Financing Activities</td>
-            <td className="py-2 text-right">{formatCurrency(data.financing_activities?.net_cash_from_financing?.current_year)}</td>
-            <td className="py-2 text-right">{formatCurrency(data.financing_activities?.net_cash_from_financing?.previous_year)}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.financing_activities?.net_cash_from_financing, 'current'))}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.financing_activities?.net_cash_from_financing, 'previous'))}</td>
             <td className="py-2 text-right">
               {(() => {
                 const change = calculateChange(
-                  data.financing_activities?.net_cash_from_financing?.current_year,
-                  data.financing_activities?.net_cash_from_financing?.previous_year
+                  getValue(data.financing_activities?.net_cash_from_financing, 'current'),
+                  getValue(data.financing_activities?.net_cash_from_financing, 'previous')
                 );
                 if (change === null) return 'N/A';
                 return (
@@ -785,13 +930,13 @@ function CashFlowTable({ data }: any) {
           </tr>
           <tr className="font-semibold border-t-2">
             <td className="py-2">Net Change in Cash</td>
-            <td className="py-2 text-right">{formatCurrency(data.net_change_in_cash?.current_year)}</td>
-            <td className="py-2 text-right">{formatCurrency(data.net_change_in_cash?.previous_year)}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.net_change_in_cash, 'current'))}</td>
+            <td className="py-2 text-right">{formatCurrency(getValue(data.net_change_in_cash, 'previous'))}</td>
             <td className="py-2 text-right">
               {(() => {
                 const change = calculateChange(
-                  data.net_change_in_cash?.current_year,
-                  data.net_change_in_cash?.previous_year
+                  getValue(data.net_change_in_cash, 'current'),
+                  getValue(data.net_change_in_cash, 'previous')
                 );
                 if (change === null) return 'N/A';
                 return (

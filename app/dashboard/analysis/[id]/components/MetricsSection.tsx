@@ -5,9 +5,11 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 interface MetricsSectionProps {
   metrics: any;
+  selectedYear: string;
+  previousYear: string | null;
 }
 
-export function MetricsSection({ metrics }: MetricsSectionProps) {
+export function MetricsSection({ metrics, selectedYear, previousYear }: MetricsSectionProps) {
   const categories = [
     { key: 'liquidity_ratios', title: 'Liquidity Ratios', icon: '💧', description: 'Ability to meet short-term obligations' },
     { key: 'profitability_ratios', title: 'Profitability Ratios', icon: '💰', description: 'Efficiency in generating profits' },
@@ -22,7 +24,7 @@ export function MetricsSection({ metrics }: MetricsSectionProps) {
     <div className="space-y-8">
       {categories.map((category) => {
         const categoryData = metrics[category.key];
-        if (!categoryData) return null;
+        if (!categoryData || !Array.isArray(categoryData)) return null;
 
         return (
           <div key={category.key}>
@@ -35,11 +37,13 @@ export function MetricsSection({ metrics }: MetricsSectionProps) {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {Object.entries(categoryData).map(([metricKey, metricData]: [string, any]) => (
+              {categoryData.map((metricData: any, index: number) => (
                 <MetricCard
-                  key={metricKey}
-                  name={formatMetricName(metricKey)}
+                  key={index}
+                  name={metricData.metric || `Metric ${index + 1}`}
                   data={metricData}
+                  selectedYear={selectedYear}
+                  previousYear={previousYear}
                 />
               ))}
             </div>
@@ -50,20 +54,23 @@ export function MetricsSection({ metrics }: MetricsSectionProps) {
   );
 }
 
-function MetricCard({ name, data }: { name: string; data: any }) {
-  if (!data || !data.current_year) return null;
+function MetricCard({ name, data, selectedYear, previousYear }: {
+  name: string;
+  data: any;
+  selectedYear: string;
+  previousYear: string | null;
+}) {
+  if (!data) return null;
 
-  const currentYear = data.current_year;
-  const previousYear = data.previous_year;
-  const currentValue = currentYear.value;
-  const previousValue = previousYear?.value;
-  const benchmark = currentYear.benchmark;
-  const interpretation = currentYear.interpretation;
-  const formula = currentYear.formula;
-  const calculation = currentYear.calculation;
+  // Extract values from year-keyed format: data.values = {"2024": 1.5, "2023": 1.3, ...}
+  const currentValue = data.values?.[selectedYear] ?? null;
+  const previousValue = previousYear ? (data.values?.[previousYear] ?? null) : null;
+  const benchmark = data.benchmark;
+  const formula = data.formula;
+  const commentary = data.comment || data.commentary;
 
   // Calculate trend
-  const trend = previousValue !== null && previousValue !== undefined
+  const trend = (previousValue !== null && previousValue !== undefined && typeof currentValue === 'number' && typeof previousValue === 'number')
     ? ((currentValue - previousValue) / Math.abs(previousValue)) * 100
     : null;
 
@@ -163,13 +170,17 @@ function MetricCard({ name, data }: { name: string; data: any }) {
         {/* Year Comparison */}
         <div className="grid grid-cols-2 gap-2 text-sm">
           <div className="space-y-1">
-            <p className="text-muted-foreground text-xs">Current Year</p>
-            <p className="font-semibold">{currentValue?.toFixed(2)}</p>
+            <p className="text-muted-foreground text-xs">{selectedYear}</p>
+            <p className="font-semibold">
+              {typeof currentValue === 'number' ? currentValue.toFixed(2) : currentValue ?? 'N/A'}
+            </p>
           </div>
-          {previousValue !== null && previousValue !== undefined && (
+          {previousYear && previousValue !== null && previousValue !== undefined && (
             <div className="space-y-1">
-              <p className="text-muted-foreground text-xs">Previous Year</p>
-              <p className="font-semibold">{previousValue.toFixed(2)}</p>
+              <p className="text-muted-foreground text-xs">{previousYear}</p>
+              <p className="font-semibold">
+                {typeof previousValue === 'number' ? previousValue.toFixed(2) : previousValue ?? 'N/A'}
+              </p>
             </div>
           )}
         </div>
@@ -182,18 +193,11 @@ function MetricCard({ name, data }: { name: string; data: any }) {
           </div>
         )}
 
-        {calculation && (
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Calculation</p>
-            <p className="text-xs font-mono bg-muted px-2 py-1 rounded">{calculation}</p>
-          </div>
-        )}
-
-        {/* Interpretation */}
-        {interpretation && (
+        {/* Commentary */}
+        {commentary && (
           <div className="border-t pt-2">
-            <p className="text-xs font-medium text-muted-foreground mb-1">💡 Interpretation</p>
-            <p className="text-xs leading-relaxed">{interpretation}</p>
+            <p className="text-xs font-medium text-muted-foreground mb-1">💡 Analysis</p>
+            <p className="text-xs leading-relaxed">{commentary}</p>
           </div>
         )}
       </CardContent>
