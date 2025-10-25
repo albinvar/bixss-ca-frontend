@@ -98,6 +98,7 @@ export default function CompanyManagementPage() {
         page: pagination.page,
         limit: 20,
         search: searchTerm,
+        status: statusFilter,
       });
 
       if (response.success) {
@@ -307,13 +308,13 @@ export default function CompanyManagementPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={company.status === 'active' ? 'default' : 'secondary'}>
-                            {company.status === 'active' ? (
+                          <Badge variant={company.isActive ? 'default' : 'secondary'}>
+                            {company.isActive ? (
                               <CheckCircle className="h-3 w-3 mr-1" />
                             ) : (
                               <XCircle className="h-3 w-3 mr-1" />
                             )}
-                            {company.status}
+                            {company.isActive ? 'Active' : 'Inactive'}
                           </Badge>
                         </TableCell>
                         <TableCell>

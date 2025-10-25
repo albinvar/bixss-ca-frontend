@@ -146,15 +146,15 @@ export default function DashboardPage() {
       {/* Welcome Header */}
       <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
             {getGreeting()}, {user?.name}!
           </h1>
-          <p className="text-sm sm:text-base text-muted-foreground mt-1">
+          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 mt-2 font-medium">
             Here's what's happening with your clients today.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" title="Export">
+          <Button variant="outline" size="icon" title="Export" className="rounded-xl border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 shadow-sm">
             <Download className="h-4 w-4" />
           </Button>
           <Button
@@ -163,6 +163,7 @@ export default function DashboardPage() {
             onClick={handleRefresh}
             disabled={isRefreshing}
             title="Refresh"
+            className="rounded-xl border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 shadow-sm"
           >
             <RotateCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
@@ -172,27 +173,32 @@ export default function DashboardPage() {
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statsData.map((stat, index) => (
-          <Card key={index}>
+          <Card key={index} className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-sm font-semibold text-slate-700 dark:text-slate-300">
                 {stat.title}
               </CardTitle>
-              <div className={`${stat.bgColor} p-2 rounded-lg`}>
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
+              <div className={`p-2.5 rounded-xl bg-gradient-to-br ${
+                stat.color === 'text-blue-600' ? 'from-blue-500 to-indigo-600' :
+                stat.color === 'text-green-600' ? 'from-emerald-500 to-green-600' :
+                stat.color === 'text-orange-600' ? 'from-amber-500 to-orange-600' :
+                'from-violet-500 to-purple-600'
+              } shadow-md`}>
+                <stat.icon className="h-4 w-4 text-white" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground flex items-center mt-1">
+              <div className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">{stat.value}</div>
+              <p className="text-xs flex items-center mt-2">
                 {stat.trend === 'up' ? (
-                  <ArrowUpRight className="mr-1 h-3 w-3 text-green-600" />
+                  <ArrowUpRight className="mr-1 h-3 w-3 text-emerald-600" />
                 ) : (
                   <ArrowDownRight className="mr-1 h-3 w-3 text-red-600" />
                 )}
-                <span className={stat.trend === 'up' ? 'text-green-600' : 'text-red-600'}>
+                <span className={`font-semibold ${stat.trend === 'up' ? 'text-emerald-600' : 'text-red-600'}`}>
                   {stat.change}
                 </span>
-                <span className="ml-1 text-muted-foreground">from last month</span>
+                <span className="ml-1 text-slate-600 dark:text-slate-400">from last month</span>
               </p>
             </CardContent>
           </Card>
@@ -202,12 +208,12 @@ export default function DashboardPage() {
       {/* Main Content Grid */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         {/* Recent Activities - Wider Column */}
-        <Card className="col-span-full lg:col-span-4">
+        <Card className="col-span-full lg:col-span-4 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Recent Activities</CardTitle>
-                <CardDescription>Your latest client interactions and updates</CardDescription>
+                <CardTitle className="text-xl font-bold text-slate-900 dark:text-slate-100">Recent Activities</CardTitle>
+                <CardDescription className="text-slate-600 dark:text-slate-400">Your latest client interactions and updates</CardDescription>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -246,14 +252,14 @@ export default function DashboardPage() {
         </Card>
 
         {/* Upcoming Deadlines - Narrower Column */}
-        <Card className="col-span-full lg:col-span-3">
+        <Card className="col-span-full lg:col-span-3 border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-lg shadow-slate-200/50 dark:shadow-slate-900/50">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Upcoming Deadlines</CardTitle>
-                <CardDescription>Don't miss these important dates</CardDescription>
+                <CardTitle className="text-xl font-bold text-slate-900 dark:text-slate-100">Upcoming Deadlines</CardTitle>
+                <CardDescription className="text-slate-600 dark:text-slate-400">Don't miss these important dates</CardDescription>
               </div>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Calendar className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
             </div>
           </CardHeader>
           <CardContent>

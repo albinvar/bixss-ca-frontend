@@ -74,17 +74,17 @@ export default function DashboardLayout({
   return (
     <ProtectedRoute>
       <SidebarProvider>
-        <div className="flex h-screen w-full">
+        <div className="flex h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50/20 to-indigo-50/10 dark:from-slate-950 dark:via-blue-950/20 dark:to-indigo-950/10">
           {/* Sidebar */}
-          <Sidebar className="border-r">
-            <SidebarHeader className="border-b px-6 py-4">
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 text-white">
-                  <span className="text-lg font-bold">B</span>
+          <Sidebar className="border-r-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shadow-xl shadow-slate-200/20 dark:shadow-slate-900/50">
+            <SidebarHeader className="border-b border-slate-200/60 dark:border-slate-800/60 px-6 py-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 text-white shadow-lg shadow-blue-500/30">
+                  <span className="text-xl font-bold">B</span>
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold">Bixss CA</h2>
-                  <p className="text-xs text-muted-foreground">Management Platform</p>
+                  <h2 className="text-lg font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">Bixss CA</h2>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Management Platform</p>
                 </div>
               </div>
             </SidebarHeader>
@@ -164,7 +164,7 @@ export default function DashboardLayout({
               </ScrollArea>
             </SidebarContent>
 
-            <SidebarFooter className="border-t p-4">
+            <SidebarFooter className="border-t border-slate-200/60 dark:border-slate-800/60 p-4 bg-gradient-to-t from-slate-50/50 to-transparent dark:from-slate-900/50">
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild>
@@ -189,9 +189,9 @@ export default function DashboardLayout({
           {/* Main Content Area */}
           <SidebarInset className="flex-1 overflow-hidden">
             {/* Top Navigation Bar */}
-            <header className="sticky top-0 z-10 flex h-16 items-center gap-2 sm:gap-4 border-b bg-background px-3 sm:px-6">
-              <SidebarTrigger className="-ml-1 sm:-ml-2" />
-              <Separator orientation="vertical" className="h-6 hidden sm:block" />
+            <header className="sticky top-0 z-10 flex h-16 items-center gap-2 sm:gap-4 border-b border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl px-3 sm:px-6 shadow-sm">
+              <SidebarTrigger className="-ml-1 sm:-ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" />
+              <Separator orientation="vertical" className="h-6 hidden sm:block bg-slate-200/60 dark:bg-slate-800/60" />
 
               {/* Breadcrumb or Page Title Area */}
               <div className="flex-1 min-w-0">
@@ -220,7 +220,7 @@ export default function DashboardLayout({
             </header>
 
             {/* Page Content */}
-            <main className="flex-1 overflow-y-auto bg-gray-50/50 dark:bg-gray-950/50">
+            <main className="flex-1 overflow-y-auto bg-gradient-to-br from-slate-50/50 via-blue-50/20 to-indigo-50/10 dark:from-slate-950/50 dark:via-blue-950/20 dark:to-indigo-950/10">
               {children}
             </main>
           </SidebarInset>
