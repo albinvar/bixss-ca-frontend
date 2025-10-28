@@ -505,4 +505,107 @@ export const caApi = {
     }>('/ca/dashboard'),
 };
 
+export const profileApi = {
+  getProfile: () =>
+    apiClient.get<{
+      success: boolean;
+      data: {
+        user: {
+          _id: string;
+          name: string;
+          email: string;
+          phone?: string;
+          role: string;
+          company?: any;
+          createdAt: string;
+        };
+        company?: any;
+        stats?: {
+          totalClients?: number;
+          totalAnalyses?: number;
+        };
+      };
+    }>('/profile'),
+
+  updateProfile: (data: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    currentPassword?: string;
+    newPassword?: string;
+  }) =>
+    apiClient.put<{
+      success: boolean;
+      message: string;
+      data: {
+        user: any;
+      };
+    }>('/profile', data),
+
+  updateCompanyProfile: (data: {
+    name?: string;
+    industry?: string;
+    registrationNumber?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+  }) =>
+    apiClient.put<{
+      success: boolean;
+      message: string;
+      data: {
+        company: any;
+      };
+    }>('/profile/company', data),
+};
+
+export const notificationsApi = {
+  getNotifications: (params?: { limit?: number; unreadOnly?: boolean }) =>
+    apiClient.get<{
+      success: boolean;
+      data: {
+        notifications: Array<{
+          _id: string;
+          type: string;
+          title: string;
+          description: string;
+          link?: string;
+          metadata?: any;
+          read: boolean;
+          readAt?: string;
+          createdAt: string;
+        }>;
+        unreadCount: number;
+      };
+    }>(`/notifications${params ? `?${new URLSearchParams(params as any).toString()}` : ''}`),
+
+  getUnreadCount: () =>
+    apiClient.get<{
+      success: boolean;
+      data: {
+        unreadCount: number;
+      };
+    }>('/notifications/unread-count'),
+
+  markAsRead: (notificationId: string) =>
+    apiClient.put<{
+      success: boolean;
+      data: {
+        notification: any;
+      };
+    }>(`/notifications/${notificationId}/read`, {}),
+
+  markAllAsRead: () =>
+    apiClient.put<{
+      success: boolean;
+      message: string;
+    }>('/notifications/mark-all-read', {}),
+
+  deleteNotification: (notificationId: string) =>
+    apiClient.delete<{
+      success: boolean;
+      message: string;
+    }>(`/notifications/${notificationId}`),
+};
+
 export default apiClient;

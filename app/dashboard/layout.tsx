@@ -165,24 +165,7 @@ export default function DashboardLayout({
             </SidebarContent>
 
             <SidebarFooter className="border-t border-slate-200/60 dark:border-slate-800/60 p-4 bg-gradient-to-t from-slate-50/50 to-transparent dark:from-slate-900/50">
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link href="/dashboard/help">
-                      <HelpCircle className="h-4 w-4" />
-                      <span>Help & Support</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <Link href="/dashboard/settings">
-                      <Settings className="h-4 w-4" />
-                      <span>Settings</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
+              {/* Footer content removed */}
             </SidebarFooter>
           </Sidebar>
 

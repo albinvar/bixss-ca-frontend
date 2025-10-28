@@ -361,6 +361,23 @@ export default function ComparePage() {
           </Card>
         </div>
 
+        {/* Summary */}
+        {comparisonData.summary && (
+          <Card className="bg-muted/30 border-2">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                Executive Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {comparisonData.summary}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Side-by-Side Comparison */}
         <div className="space-y-4">
             {/* Analysis Headers */}
@@ -548,95 +565,218 @@ export default function ComparePage() {
                 );
               });
             })()}
+        </div>
+      </div>
+    );
+  }
 
-          {/* Standardized Financial Fields Comparison */}
-          {analyses.length >= 2 && analyses[0].standardized_fields && (
+  // Selection screen
+  return (
+              <Card className="border-green-200 dark:border-green-900">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2 text-green-700 dark:text-green-400">
+                    <TrendingUp className="h-5 w-5" />
+                    Improving Metrics ({comparisonData.improving_metrics.length})
+                  </CardTitle>
+                  <CardDescription>
+                    Metrics showing positive improvement over the comparison period
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {comparisonData.improving_metrics.map((metric: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-3 rounded-lg border bg-green-50 dark:bg-green-950/20">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <CheckCircle2 className="h-4 w-4 text-green-600" />
+                            <span className="text-sm font-medium">
+                              {metric.metric.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                            </span>
+                            {metric.category && (
+                              <Badge variant="secondary" className="text-xs">{metric.category}</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground ml-6">
+                            <span>{formatValue(metric.first_value, metric.unit)}</span>
+                            <ArrowRight className="h-3 w-3" />
+                            <span>{formatValue(metric.last_value, metric.unit)}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-green-700 dark:text-green-400 font-semibold">
+                            +{metric.change.toFixed(1)}%
+                          </span>
+                          <ArrowUpRight className="h-4 w-4 text-green-600" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Declining Metrics */}
+            {comparisonData.declining_metrics && comparisonData.declining_metrics.length > 0 && (
+              <Card className="border-red-200 dark:border-red-900">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2 text-red-700 dark:text-red-400">
+                    <TrendingDown className="h-5 w-5" />
+                    Declining Metrics ({comparisonData.declining_metrics.length})
+                  </CardTitle>
+                  <CardDescription>
+                    Metrics showing negative trends that may require attention
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {comparisonData.declining_metrics.map((metric: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-3 rounded-lg border bg-red-50 dark:bg-red-950/20">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <AlertTriangle className="h-4 w-4 text-red-600" />
+                            <span className="text-sm font-medium">
+                              {metric.metric.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                            </span>
+                            {metric.category && (
+                              <Badge variant="secondary" className="text-xs">{metric.category}</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground ml-6">
+                            <span>{formatValue(metric.first_value, metric.unit)}</span>
+                            <ArrowRight className="h-3 w-3" />
+                            <span>{formatValue(metric.last_value, metric.unit)}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-red-700 dark:text-red-400 font-semibold">
+                            {metric.change.toFixed(1)}%
+                          </span>
+                          <ArrowDownRight className="h-4 w-4 text-red-600" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Health Progression Timeline */}
+            {comparisonData.health_progression && comparisonData.health_progression.length > 1 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    Health Status Progression
+                  </CardTitle>
+                  <CardDescription>
+                    Timeline of health status changes across analyses
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {comparisonData.health_progression.map((item: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-4 p-3 rounded-lg border">
+                        <div className="flex-shrink-0 w-24 text-xs text-muted-foreground">
+                          {new Date(item.date).toLocaleDateString()}
+                        </div>
+                        <div className="flex-1">
+                          <Badge variant="default">{item.health_status}</Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Percent className="h-3 w-3 text-muted-foreground" />
+                          <span className="font-medium">{(item.confidence_score * 100).toFixed(0)}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* All Metrics Tab */}
+          <TabsContent value="metrics" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
-                  Standardized Financial Fields
+                  <BarChart3 className="h-5 w-5" />
+                  All Metric Trends
                 </CardTitle>
                 <CardDescription>
-                  Side-by-side comparison of standardized accounting values
+                  Complete timeline view of all tracked financial metrics
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="border-b">
-                      <tr className="text-left">
-                        <th className="pb-3 font-medium">Field</th>
-                        <th className="pb-3 font-medium text-right">
-                          Analysis 1
-                          <div className="text-xs font-normal text-muted-foreground mt-1">
-                            {new Date(analyses[0].created_at).toLocaleDateString()}
+                <div className="space-y-6">
+                  {comparisonData.metric_trends && Object.entries(comparisonData.metric_trends).map(([metricKey, values]: [string, any]) => {
+                    if (!values || values.length === 0) return null;
+
+                    const metricName = metricKey.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+                    const firstValue = values[0]?.value;
+                    const lastValue = values[values.length - 1]?.value;
+                    const change = firstValue !== 0 ? ((lastValue - firstValue) / Math.abs(firstValue)) * 100 : 0;
+                    const unit = values[0]?.unit || '';
+                    const category = values[0]?.category || 'Other';
+
+                    return (
+                      <div key={metricKey} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{metricName}</span>
+                            <Badge variant="secondary" className="text-xs">{category}</Badge>
                           </div>
-                        </th>
-                        <th className="pb-3 font-medium text-right">
-                          Analysis 2
-                          <div className="text-xs font-normal text-muted-foreground mt-1">
-                            {new Date(analyses[1].created_at).toLocaleDateString()}
-                          </div>
-                        </th>
-                        <th className="pb-3 font-medium text-right">Change</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {Object.entries(analyses[0].standardized_fields).map(([key, field1]: [string, any]) => {
-                        const field2 = analyses[1]?.standardized_fields?.[key];
-
-                        // Extract latest year values from the nested structure
-                        const getValue = (field: any) => {
-                          if (!field || !field.values) return null;
-                          const years = Object.keys(field.values).sort((a, b) => parseInt(b) - parseInt(a));
-                          return years.length > 0 ? field.values[years[0]] : null;
-                        };
-
-                        const value1 = getValue(field1);
-                        const value2 = getValue(field2);
-
-                        // Calculate change percentage
-                        const change = (value1 !== null && value2 !== null &&
-                                       typeof value1 === 'number' && typeof value2 === 'number' &&
-                                       Math.abs(value1) > 0.0001)
-                          ? ((value2 - value1) / Math.abs(value1)) * 100
-                          : null;
-
-                        return (
-                          <tr key={key}>
-                            <td className="py-3 text-muted-foreground font-medium">
-                              {key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-                            </td>
-                            <td className="py-3 text-right font-medium">
-                              {value1 !== null && typeof value1 === 'number'
-                                ? value1.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                                : 'N/A'}
-                            </td>
-                            <td className="py-3 text-right font-medium">
-                              {value2 !== null && typeof value2 === 'number'
-                                ? value2.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                                : 'N/A'}
-                            </td>
-                            <td className="py-3 text-right">
-                              {change !== null ? (
-                                <span className={change >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                  {change >= 0 ? '↑' : '↓'} {Math.abs(change).toFixed(1)}%
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">N/A</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                          {getChangeIndicator(change)}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>From: {formatValue(firstValue, unit)}</span>
+                          <span>→</span>
+                          <span>To: {formatValue(lastValue, unit)}</span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${change > 0 ? 'bg-green-500' : change < 0 ? 'bg-red-500' : 'bg-muted-foreground'}`}
+                            style={{ width: `${Math.min(Math.abs(change), 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
-          )}
-        </div>
+          </TabsContent>
+
+          {/* Raw Data Tab */}
+          <TabsContent value="fields" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {analyses.slice(0, 2).map((analysis: any, idx: number) => (
+                <Card key={idx}>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Analysis {idx + 1} - Extracted Fields
+                    </CardTitle>
+                    <CardDescription>
+                      {new Date(analysis.created_at).toLocaleDateString()}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                      {analysis.extracted_fields && Object.entries(analysis.extracted_fields).map(([key, value]: [string, any]) => (
+                        <div key={key} className="flex justify-between text-sm border-b pb-2">
+                          <span className="text-muted-foreground font-mono text-xs">
+                            {key}
+                          </span>
+                          <span className="font-medium">{formatValue(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     );
   }

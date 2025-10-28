@@ -25,9 +25,11 @@ import {
   Bell
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useRouter } from 'next/navigation';
 
 export default function UserMenu() {
   const { user, logout } = useAuth();
+  const router = useRouter();
 
   if (!user) return null;
 
@@ -87,18 +89,9 @@ export default function UserMenu() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push('/dashboard/profile')}>
             <User className="mr-2 h-4 w-4" />
             <span>Profile</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem>
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Settings</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem>
-            <Bell className="mr-2 h-4 w-4" />
-            <span>Notifications</span>
-            <Badge variant="destructive" className="ml-auto h-4 px-1 text-[10px]">3</Badge>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
